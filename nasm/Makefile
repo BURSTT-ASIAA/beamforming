@@ -1,5 +1,10 @@
+all: testasm testasm2
+
 testasm: testasm.o asmfunc.o
 	gcc -o testasm testasm.o asmfunc.o
+
+testasm2: testasm2.o asmfunc.o
+	gcc -o testasm2 testasm2.o asmfunc.o
 
 asmfunc.o: asmfunc.asm
 	nasm -f elf64 asmfunc.asm
