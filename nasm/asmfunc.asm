@@ -2,8 +2,9 @@
 
 swapReIm:   dw  1,0,3,2,5,4,7,6,9,8,11,10,13,12,15,14
             dw  17,16,19,18,21,20,23,22,25,24,27,26,29,28,31,30
-bitMask:    db  16 dup 0xF0
 evenOdd:    dd  0, 2, 4, 6, 8, 10, 12, 14, 1, 3, 5, 7, 9, 11, 13, 15
+allOne:     dd  8 dup 1.0
+bitMask:    db  16 dup 0xF0
 
     section .bss
 
@@ -42,15 +43,13 @@ evenOdd:    dd  0, 2, 4, 6, 8, 10, 12, 14, 1, 3, 5, 7, 9, 11, 13, 15
 
     ; merge real and imaginary then sum
     vinserti32x4 ymm1, ymm1, xmm3, 1
-    vpsrldq ymm2, ymm1, 8
-    vpaddd ymm1, ymm1, ymm2
-    vpsrldq ymm2, ymm1, 4
-    vpaddd ymm1, ymm1, ymm2
-    vextracti32x4 xmm2, ymm1, 1
+    vcvtdq2ps ymm1, ymm1
+    vdpps ymm1, ymm1, ymm8, 0xF1
+    vextractf32x4 xmm2, ymm1, 1
 
     ; save the sum
-    vpexpandd zmm11{k1}, zmm2
-    vpexpandd zmm12{k1}, zmm1
+    vexpandps zmm11{k1}, zmm2
+    vexpandps zmm12{k1}, zmm1
 
     ; shift opmask
     kshiftld k1, k1, 1
@@ -64,9 +63,10 @@ asmfunc:
     push rbp
     mov rbp, rsp
 
-    ; load zmm15, xmm14, zmm7, k2, k3
+    ; load zmm15, xmm14, ymm8, zmm7, k2, k3
     vmovdqu16 zmm15, [swapReIm]
     vmovdqu8 xmm14, [bitMask]
+    vmovups ymm8, [allOne]
     vmovdqu32 zmm7, [evenOdd]
     mov eax, 0x33
     kmovb k2, eax
@@ -137,13 +137,10 @@ integralLp:
     dotproduct zmm30
     dotproduct zmm31
 
-    ; calculate square
-    vcvtdq2ps zmm11, zmm11
+    ; calculate square sum
     vmulps zmm11, zmm11, zmm11
-    vcvtdq2ps zmm12, zmm12
     vmulps zmm12, zmm12, zmm12
     vaddps zmm11, zmm11, zmm12
-;    vsqrtps zmm11, zmm11
 
     ; integral
     vaddps zmm13, zmm13, zmm11
