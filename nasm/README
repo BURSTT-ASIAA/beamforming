@@ -1,11 +1,11 @@
-asmfunc.asm :
+- asmfunc.asm
 FRB matrix multiplication and integration, read the 16x16 matrix into the 16x zmm registers
 
-asmfunc_mem.asm :
+- asmfunc_mem.asm
 FRB matrix multiplication and integration, read the 16x16 matrix directly from memory
 
-testasm.c :
+- testasm.c
 Feed 16 bytes data(x40M) to the assembly function to test performance
 
-testasm2.c :
+- testasm2.c
 Use to validate the assembly function

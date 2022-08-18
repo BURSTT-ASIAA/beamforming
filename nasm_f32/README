@@ -1,0 +1,8 @@
+- asmfunc_mem.asm
+FRB matrix multiplication and integration, float32 format
+
+- testasm.c
+Feed 16 bytes data(x40M) to the assembly function to test performance
+
+- testasm2.c
+Use to validate the assembly function
