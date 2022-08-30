@@ -7,8 +7,8 @@
 int asmfunc(float *mat, char *vec, long n, float *dest);
 
 int main(void) {
+    float mat[16*16*2] __attribute__ ((aligned (64)));
     float dest[16] __attribute__ ((aligned (64)));
-    float mat[16*16*2];
     char *vec;
     int i, j, n, p, p2;
     clock_t start, end;
@@ -38,7 +38,7 @@ int main(void) {
             vec[p] = j*15;
         }
     }
-    asmfunc(mat, vec, 1, dest);
+    asmfunc(mat, vec, nvec, dest);
 
     printf("Matrix:\n");
     for (j=0; j<16; j++) {
