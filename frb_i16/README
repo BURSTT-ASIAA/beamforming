@@ -1,0 +1,10 @@
+Integer 16 format with AVX2
+
+- asmfunc_mem.asm
+FRB matrix(need to be transposed) multiplication and integration
+
+- testasm.c
+Feed 16 bytes data(x40M) to the assembly function to test performance
+
+- testasm2.c
+Use to validate the assembly function
