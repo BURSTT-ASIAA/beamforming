@@ -10,6 +10,9 @@ asmfunc_mem.o: asmfunc_mem.asm
 	nasm -f elf64 asmfunc_mem.asm
 #	nasm -f elf64 -g -F dwarf asmfunc_mem.asm
 
+%.o: %.c
+	gcc -fPIC -c $<
+
 clean:
 	rm -f *.o
 
