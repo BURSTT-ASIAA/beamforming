@@ -23,8 +23,8 @@ asmfunc:
     vmovdqu xmm15, [bitMask]
 
     ; zeroed ymm13, ymm14(sum for square)
-    vpxor ymm13, ymm13, ymm13
-    vpxor ymm14, ymm14, ymm14
+    vxorps ymm13, ymm13, ymm13
+    vxorps ymm14, ymm14, ymm14
     xor r15, r15
 
     lea r10, [realV]
@@ -82,28 +82,28 @@ rowLp:
     vpmulhw ymm1, ymm11, ymm11
     vpunpcklwd ymm2, ymm0, ymm1
     vpunpckhwd ymm3, ymm0, ymm1
-    vpaddd ymm13, ymm13, ymm2
-    vpaddd ymm14, ymm14, ymm3
+    vcvtdq2ps ymm2, ymm2
+    vcvtdq2ps ymm3, ymm3
+    vaddps ymm13, ymm13, ymm2
+    vaddps ymm14, ymm14, ymm3
 
     vpmullw ymm0, ymm12, ymm12
     vpmulhw ymm1, ymm12, ymm12
     vpunpcklwd ymm2, ymm0, ymm1
     vpunpckhwd ymm3, ymm0, ymm1
-    vpaddd ymm13, ymm13, ymm2
-    vpaddd ymm14, ymm14, ymm3
+    vcvtdq2ps ymm2, ymm2
+    vcvtdq2ps ymm3, ymm3
+    vaddps ymm13, ymm13, ymm2
+    vaddps ymm14, ymm14, ymm3
 
     add r15, 16
     dec rdx
     jnz integralLp
 
     ; rearrange
-    vinserti128 ymm0, ymm13, xmm14, 1
-    vextracti128 xmm2, ymm13, 1
-    vinserti128 ymm1, ymm14, xmm2, 0
-
-    ; convert to float
-    vcvtdq2ps ymm0, ymm0
-    vcvtdq2ps ymm1, ymm1
+    vinsertf128 ymm0, ymm13, xmm14, 1
+    vextractf128 xmm2, ymm13, 1
+    vinsertf128 ymm1, ymm14, xmm2, 0
 
     ; copy to destination
     vmovaps [rcx], ymm0
