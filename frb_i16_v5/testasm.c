@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/time.h>
 
 #define nvec 40000000
 
@@ -12,7 +13,8 @@ int main(void) {
     char *vec;
     int i, j, n, p, p2;
     clock_t start, end;
-    double cpu_time_used;
+    struct timeval start_t, end_t;
+    double cpu_time_used, time_used;
 
     for (j=0; j<16; j++) {
         for (i=0; i<16; i++) {
@@ -33,10 +35,13 @@ int main(void) {
 
     for (i=0; i<10; i++) {
         start = clock();
+        gettimeofday(&start_t, NULL);
         asmfunc(mat, vec, nvec, dest);
         end = clock();
+        gettimeofday(&end_t, NULL);
         cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-        printf("Datasize: %d x 16 bytes  CPU time : %.5f\n", nvec, cpu_time_used);
+        time_used = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_usec - start_t.tv_usec) / 1000000.;
+        printf("Datasize: %d x 16 bytes  CPU time : %.3f  Real time : %.3f\n", nvec, cpu_time_used, time_used);
     }
 
     free(vec);
