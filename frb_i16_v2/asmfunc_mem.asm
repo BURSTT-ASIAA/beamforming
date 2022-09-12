@@ -53,9 +53,11 @@ integralLp:
     vpsraw ymm1, ymm1, 4
 
     ; (imag, real)
-    vpermw ymm2, ymm14, ymm0
+    vpshuflw ymm2, ymm0, 0xb1
+    vpshufhw ymm2, ymm2, 0xb1
     vmovdqa [r10], ymm2
-    vpermw ymm2, ymm14, ymm1
+    vpshuflw ymm2, ymm1, 0xb1
+    vpshufhw ymm2, ymm2, 0xb1
     vmovdqa [r10+32], ymm2
 
     ; (real, -imag)
