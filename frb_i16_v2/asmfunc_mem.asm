@@ -4,7 +4,6 @@ default rel
 
 align       32
 negImag:    times 8 dw 1, -1
-swapReIm:   dw  1,0,3,2,5,4,7,6,9,8,11,10,13,12,15,14
 bitMask:    times 16 db 0xF0
 
     section .bss
@@ -24,7 +23,6 @@ asmfunc:
 
     ; load xmm15, ymm14, ymm13
     vmovdqa xmm15, [bitMask]
-    vmovdqa ymm14, [swapReIm]
     vmovdqa ymm13, [negImag]
 
     ; clear ymm11, ymm12(sum for square)
