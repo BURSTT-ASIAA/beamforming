@@ -2,7 +2,7 @@ default rel
 
     section .data
 
-bitMask:    db  16 dup 0xF0
+bitMask:    times 16 db 0xF0
 
     section .bss
 

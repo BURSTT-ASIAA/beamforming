@@ -1,7 +1,7 @@
     section .data
 
-allOne:     dd  4 dup 1.0
-bitMask:    db  16 dup 0xF0
+allOne:     times 4 dd 1.0
+bitMask:    times 16 db 0xF0
 
     section .bss
 

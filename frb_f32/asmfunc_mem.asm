@@ -2,7 +2,7 @@ default rel
 
     section .data
 
-bitMask:    db  16 dup 0xF0
+bitMask:    times 16 db 0xF0
 
     section .bss
 
@@ -52,6 +52,9 @@ integralLp:
     mov rbx, rdi
     vxorps zmm11, zmm11, zmm11
     vxorps zmm12, zmm12, zmm12
+;    vxorps zmm9, zmm9, zmm9
+;    vxorps zmm10, zmm10, zmm10
+
 rowLp:
     ; load a column from matrix
     vmovaps zmm2, [rbx]
@@ -64,6 +67,10 @@ rowLp:
     ; calculate real part
     vfmadd231ps zmm11, zmm0, zmm2
     vfnmadd231ps zmm11, zmm1, zmm3
+;    vmulps zmm10, zmm0, zmm2
+;    vaddps zmm11, zmm11, zmm10
+;    vmulps zmm10, zmm1, zmm3
+;    vsubps zmm11, zmm11, zmm10
 
     ; calculate imag part
     vfmadd231ps zmm12, zmm0, zmm3
@@ -75,6 +82,8 @@ rowLp:
     jb rowLp
 
     ; integral
+;    vaddps zmm11, zmm11, zmm9
+;    vaddps zmm12, zmm12, zmm10
     vfmadd231ps zmm13, zmm11, zmm11
     vfmadd231ps zmm13, zmm12, zmm12
 

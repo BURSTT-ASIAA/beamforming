@@ -3,8 +3,8 @@
 swapReIm:   dw  1,0,3,2,5,4,7,6,9,8,11,10,13,12,15,14
             dw  17,16,19,18,21,20,23,22,25,24,27,26,29,28,31,30
 evenOdd:    dd  0, 2, 4, 6, 8, 10, 12, 14, 1, 3, 5, 7, 9, 11, 13, 15
-allOne:     dd  8 dup 1.0
-bitMask:    db  16 dup 0xF0
+allOne:     times 8 dd 1.0
+bitMask:    times 16 db 0xF0
 
     section .bss
 
