@@ -67,10 +67,6 @@ rowLp:
     ; calculate real part
     vfmadd231ps zmm11, zmm0, zmm2
     vfnmadd231ps zmm11, zmm1, zmm3
-;    vmulps zmm10, zmm0, zmm2
-;    vaddps zmm11, zmm11, zmm10
-;    vmulps zmm10, zmm1, zmm3
-;    vsubps zmm11, zmm11, zmm10
 
     ; calculate imag part
     vfmadd231ps zmm12, zmm0, zmm3

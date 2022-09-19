@@ -69,17 +69,11 @@ rowLp:
     ; load a column from matrix
     vmovdqu16 zmm0, [rbx]
 
-    ; load a vector element
-    vpbroadcastd zmm1, [r10+rax*4]
-    vpbroadcastd zmm2, [r11+rax*4]
-
     ; calculate real part
-    vpmaddwd zmm3, zmm0, zmm2
-    vpaddd zmm10, zmm10, zmm3
+    vpdpwssd zmm10, zmm0, [r11+rax*4]{1to16}
 
     ; calculate imag part
-    vpmaddwd zmm3, zmm0, zmm1
-    vpaddd zmm11, zmm11, zmm3
+    vpdpwssd zmm11, zmm0, [r10+rax*4]{1to16}
 
     add rbx, 64
     inc rax

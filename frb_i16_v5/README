@@ -3,6 +3,9 @@ Integer 16 format with AVX-512
 - asmfunc_mem.asm
 FRB matrix(I16+I16) multiplication and integration
 
+- asmfunc_vnni.asm
+FRB matrix(I16+I16) multiplication and integration, use VNNI
+
 - testasm.c
 Feed 16 bytes data(x40M) to the assembly function to test performance
 

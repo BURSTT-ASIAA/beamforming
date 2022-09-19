@@ -1,9 +1,12 @@
 Integer 16 format with AVX2
 
-use vpmaddwd instruction, no limit for matrix elements.
+no upper limit for matrix elements.
 
 - asmfunc_mem.asm
-FRB matrix(I16+I16) multiplication and integration
+FRB matrix(I16+I16) multiplication and integration, use vpmaddwd
+
+- asmfunc_vnni.asm
+FRB matrix(I16+I16) multiplication and integration, use vpdpwssd
 
 - testasm.c
 Feed 16 bytes data(x40M) to the assembly function to test performance
