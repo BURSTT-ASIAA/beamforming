@@ -75,11 +75,13 @@ rowLp:
 
     ; calculate real part
     vpmaddwd zmm3, zmm0, zmm2
-    vpaddd zmm10, zmm10, zmm3
 
     ; calculate imag part
-    vpmaddwd zmm3, zmm0, zmm1
-    vpaddd zmm11, zmm11, zmm3
+    vpmaddwd zmm4, zmm0, zmm1
+
+    ; accumulate
+    vpaddd zmm10, zmm10, zmm3
+    vpaddd zmm11, zmm11, zmm4
 
     add rbx, 64
     inc rax
