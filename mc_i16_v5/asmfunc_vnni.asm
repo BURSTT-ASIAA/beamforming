@@ -8,12 +8,6 @@ swapReIm:   dw  1,0,3,2,5,4,7,6,9,8,11,10,13,12,15,14
             dw  17,16,19,18,21,20,23,22,25,24,27,26,29,28,31,30
 bitMask:    times 16 db 0xF0
 
-    section .bss
-
-align       64
-beam1:      resz 1
-beam2:      resz 1
-
     section .text
 
     global asmfunc
@@ -23,6 +17,12 @@ asmfunc:
     push rbp
     mov rbp, rsp
 
+    ; local variables
+    and rsp, -64
+    sub rsp, 128
+    lea r10, [rsp+64]
+    lea r11, [rsp]
+
     ; load xmm15, zmm13, zmm12
     vmovdqu8 xmm15, [bitMask]
     vmovdqu16 zmm13, [swapReIm]
@@ -31,10 +31,6 @@ asmfunc:
     ; clear zmm14(sum for square)
     vxorps zmm14, zmm14, zmm14
     xor r15, r15
-
-    ; more setup
-    lea r10, [beam1]
-    lea r11, [beam2]
 
 integralLp:
     ; unpack antenna data to [beam]

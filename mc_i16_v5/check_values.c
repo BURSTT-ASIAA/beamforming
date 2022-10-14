@@ -14,13 +14,14 @@
 #include <rte_debug.h>
 #include <rte_malloc.h>
 
-#define BUFFER_SIZE 1024*16*400*250 // 1.6G
+#define BUFFER_SIZE 1024*16*400*1024U // 6.4G
 #define nvec 2
 
 typedef struct {
 	short *mat;
 	char *vec;
-	long n;
+	long nr;
+	long nc;
 	float *dest;
 } parStruct;
 
@@ -34,8 +35,8 @@ lcore_math(void *arg)
 	parStruct *params = arg;
 
 	lcore_id = rte_lcore_id();
-	printf("hello from core %u %p\n", lcore_id, params->dest);
-	asmfunc(params->mat, params->vec, params->n, params->dest);
+	printf("hello from core %u\n", lcore_id);
+	asmfunc(params->mat, params->vec, params->nr, params->dest);
 
 	return 0;
 }
@@ -94,7 +95,7 @@ main(int argc, char **argv)
 	while (lcore_id < RTE_MAX_LCORE) {
 		params[i].mat = mat;
 		params[i].vec = vec;
-		params[i].n = nvec;
+		params[i].nr = nvec;
 		params[i].dest = dest + i * 16;
 		rte_eal_remote_launch(lcore_math, &params[i], lcore_id);
 		i++;
@@ -105,7 +106,7 @@ main(int argc, char **argv)
 	/* call it on main lcore too */
 	params[0].mat = mat;
 	params[0].vec = vec;
-	params[0].n = nvec;
+	params[0].nr = nvec;
 	params[0].dest = dest;
 	lcore_math(&params[0]);
 	/* >8 End of launching the function on each lcore. */
@@ -136,7 +137,7 @@ main(int argc, char **argv)
 	}
 
 	/* clean up the EAL */
-    rte_free(vec);
+	rte_free(vec);
 	rte_eal_cleanup();
 
 	return 0;
