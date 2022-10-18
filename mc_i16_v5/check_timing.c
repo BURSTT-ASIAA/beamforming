@@ -15,8 +15,9 @@
 #include <rte_debug.h>
 #include <rte_malloc.h>
 
-#define BUFFER_SIZE 1024*16*400*100UL // 640M
-#define nvec 1024*400*100UL
+//#define BUFFER_SIZE 1024*16*400*1000UL // 6.4G
+#define NR_pack 400*1000UL
+#define NR_ch 64UL
 
 typedef struct {
 	short *mat;
@@ -26,7 +27,7 @@ typedef struct {
 	float *dest;
 } parStruct;
 
-int asmfunc(short *mat, char *vec, long n, float *dest);
+int asmfunc(short *mat, char *vec, long nr, long nc, float *dest);
 
 /* Launch a function on lcore. 8< */
 static int
@@ -39,7 +40,7 @@ lcore_math(void *arg)
 
 	lcore_id = rte_lcore_id();
 	gettimeofday(&start_t, NULL);
-	asmfunc(params->mat, params->vec, params->nr, params->dest);
+	asmfunc(params->mat, params->vec, params->nr, params->nc, params->dest);
 	gettimeofday(&end_t, NULL);
 	time_used = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_usec - start_t.tv_usec) / 1000000.;
 	printf("CPU core #%u  Real time: %.3f\n", lcore_id, time_used);
@@ -56,7 +57,7 @@ main(int argc, char **argv)
 	unsigned lcore_id;
 	char *vec;
 	short mat[16*16*2];
-	float dest[16*RTE_MAX_LCORE] __attribute__ ((aligned (64)));
+	float dest[16*1024] __attribute__ ((aligned (64)));
 	int i, j, n, p, p2, ncores;
 	parStruct params[RTE_MAX_LCORE];
 	clock_t start, end;
@@ -68,7 +69,7 @@ main(int argc, char **argv)
 	/* >8 End of initialization of Environment Abstraction Layer */
 
 	/* Create the data buffer */
-	vec = rte_malloc_socket(NULL, BUFFER_SIZE, 0x40, rte_socket_id());
+	vec = rte_malloc_socket(NULL, NR_pack*1024*16, 0x40, rte_socket_id());
 	if (vec == NULL)
 		rte_exit(EXIT_FAILURE, "Cannot init data buffer %d\n", i);
 
@@ -93,18 +94,21 @@ main(int argc, char **argv)
 	start = clock();
 	RTE_LCORE_FOREACH_WORKER(lcore_id) {
 		params[i].mat = mat;
-		params[i].vec = vec;
-		params[i].nr = nvec;
-		params[i].dest = dest + i * 16;
+		params[i].vec = vec + i * NR_ch * 16;
+		params[i].nr = NR_pack;
+		params[i].nc = NR_ch;
+		params[i].dest = dest + i * NR_ch * 16;
 		rte_eal_remote_launch(lcore_math, &params[i], lcore_id);
 		i++;
+		if (i >= 16) break;
 	}
 	ncores = i;
 
 	/* call it on main lcore too */
 	params[0].mat = mat;
 	params[0].vec = vec;
-	params[0].nr = nvec;
+	params[0].nr = NR_pack;
+	params[0].nc = NR_ch;
 	params[0].dest = dest;
 	lcore_math(&params[0]);
 	/* >8 End of launching the function on each lcore. */

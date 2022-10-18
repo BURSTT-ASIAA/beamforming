@@ -6,7 +6,8 @@ align       64
 negImag:    times 16 dw 1, -1
 swapReIm:   dw  1,0,3,2,5,4,7,6,9,8,11,10,13,12,15,14
             dw  17,16,19,18,21,20,23,22,25,24,27,26,29,28,31,30
-bitMask:    times 16 db 0xF0
+bitMask:    times 16 dd 0xF0
+;minFloat:   dd 0x38800000   ; smallest positive normal number for FP16
 
     section .text
 
@@ -14,6 +15,9 @@ bitMask:    times 16 db 0xF0
 asmfunc:
     push rbx
     push r15
+    push r14
+    push r13
+    push r12
     push rbp
     mov rbp, rsp
 
@@ -22,24 +26,45 @@ asmfunc:
     sub rsp, 128
     lea r10, [rsp+64]
     lea r11, [rsp]
+    mov rax, rcx
+    shl rax, 6
+    sub rsp, rax
 
-    ; load xmm15, zmm13, zmm12
-    vmovdqu8 xmm15, [bitMask]
+    ; load zmm15, zmm13, zmm12
+    vmovdqa32 zmm15, [bitMask]
     vmovdqu16 zmm13, [swapReIm]
     vmovdqu16 zmm12, [negImag]
 
-    ; clear zmm14(sum for square)
-    vxorps zmm14, zmm14, zmm14
+    ; clear (sum for square)
+    vxorps zmm0, zmm0, zmm0
+    xor rax, rax
+    mov rbx, rcx
+
+clearLp:
+    vmovaps [rsp+rax], zmm0
+    add rax, 64
+    dec rbx
+    jnz clearLp
+
     xor r15, r15
+    mov r14, rdx
+
+integralLp3:
+    xor r13, r13
+    prefetchnta [rsi+r15+16384]
+
+integralLp2:
+    mov r12, 4
+    vmovdqa32 zmm14, [rsi+r15]
 
 integralLp:
     ; unpack antenna data to [beam]
-    vmovdqu8 xmm0, [rsi+r15]
-    vmovdqu8 xmm1, xmm0
+    vpandd zmm0, zmm14, zmm15
+    vpmovdb xmm0, zmm0
 
-    pand xmm0, xmm15
-    psllw xmm1, 4
-    pand xmm1, xmm15
+    vpslld zmm1, zmm14, 4
+    vpandd zmm1, zmm1, zmm15
+    vpmovdb xmm1, zmm1
 
     vpunpcklbw xmm2, xmm1, xmm0
     vpunpckhbw xmm3, xmm1, xmm0
@@ -79,17 +104,45 @@ rowLp:
     ; integral
     vcvtdq2ps zmm10, zmm10
     vcvtdq2ps zmm11, zmm11
-    vfmadd231ps zmm14, zmm10, zmm10
-    vfmadd231ps zmm14, zmm11, zmm11
+    mov rax, r13
+    shl rax, 6
+    vmovaps zmm0, [rsp+rax]
+    vfmadd231ps zmm0, zmm10, zmm10
+    vfmadd231ps zmm0, zmm11, zmm11
+    vmovaps [rsp+rax], zmm0
 
-    add r15, 16
-    dec rdx
+;    add r15, 16
+    vpsrldq zmm14, zmm14, 1
+    inc r13
+    dec r12
     jnz integralLp
 
+    add r15, 64
+    cmp r13, rcx
+    jb integralLp2
+
+    mov rax, rcx
+    shl rax, 4
+    add r15, 16384
+    sub r15, rax
+    dec r14
+    jnz integralLp3
+
     ; copy to destination
-    vmovaps [rcx], zmm14
+    xor rax, rax
+    mov rbx, rcx
+
+copyLp:
+    vmovaps zmm0, [rsp+rax]
+    vmovaps [r8+rax], zmm0
+    add rax, 64
+    dec rbx
+    jnz copyLp
 
     leave
+    pop r12
+    pop r13
+    pop r14
     pop r15
     pop rbx
     ret
