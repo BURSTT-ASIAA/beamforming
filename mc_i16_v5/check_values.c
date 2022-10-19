@@ -14,8 +14,7 @@
 #include <rte_debug.h>
 #include <rte_malloc.h>
 
-#define BUFFER_SIZE 1024*16*400*1024U // 6.4G
-#define NR_pack 100L
+#define NR_pack 10L
 #define NR_ch 64UL
 
 typedef struct {
@@ -50,7 +49,7 @@ main(int argc, char **argv)
 	int ret;
 	unsigned lcore_id;
 	char *vec;
-	short mat[16*16*2];
+	short mat[16*16*2*1024];
 	float dest[16*1024] __attribute__ ((aligned (64)));
 	int i, j, k, n, p, p2, ncores;
 	parStruct params[RTE_MAX_LCORE];
@@ -66,20 +65,20 @@ main(int argc, char **argv)
 			rte_exit(EXIT_FAILURE, "Cannot init data buffer\n");
 
 	// transposed matrix
-	for (j=0; j<16; j++) {
-		for (i=0; i<16; i++) {
-			// p: real, p2:imag
-			p = i * 32 + j * 2;
-			p2 = i * 32 + j * 2 + 1;
-			if (i == j) {
-				mat[p] = 1;
-				mat[p2] = 0;
-			} else {
-				mat[p] = 0;
-				mat[p2] = 0;
+	for (k=0; k<1024; k++)
+		for (j=0; j<16; j++)
+			for (i=0; i<16; i++) {
+				// p: real, p2:imag
+				p = ((k * 16 + j) * 16 + i) * 2;
+				p2 = p + 1;
+				if (i == j && (k % 2) == 0) {
+					mat[p] = 1;
+					mat[p2] = 0;
+				} else {
+					mat[p] = 0;
+					mat[p2] = 0;
+				}
 			}
-		}
-	}
 
 	for (i=0; i<NR_pack; i++)
 		for (j=0; j<1024; j++)
@@ -92,7 +91,7 @@ main(int argc, char **argv)
 	lcore_id = rte_get_next_lcore(-1, 1, 0);
 	i = 1;
 	while (lcore_id < RTE_MAX_LCORE && i < 16) {
-		params[i].mat = mat;
+		params[i].mat = mat + i * NR_ch * 512;
 		params[i].vec = vec + i * NR_ch * 16;
 		params[i].nr = NR_pack;
 		params[i].nc = NR_ch;

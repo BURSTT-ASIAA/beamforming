@@ -51,7 +51,9 @@ clearLp:
 
 integralLp3:
     xor r13, r13
-    prefetchnta [rsi+r15+16384]
+    mov rbx, rdi
+;    prefetchnta [rdi]
+;    prefetchnta [rsi+r15+16384]
 
 integralLp2:
     mov r12, 4
@@ -85,7 +87,7 @@ integralLp:
     vpxord zmm11, zmm11, zmm11
 
     xor rax, rax
-    mov rbx, rdi
+;    mov rbx, rdi
 rowLp:
     ; load a column from matrix
     vmovdqu16 zmm0, [rbx]
@@ -111,7 +113,6 @@ rowLp:
     vfmadd231ps zmm0, zmm11, zmm11
     vmovaps [rsp+rax], zmm0
 
-;    add r15, 16
     vpsrldq zmm14, zmm14, 1
     inc r13
     dec r12
