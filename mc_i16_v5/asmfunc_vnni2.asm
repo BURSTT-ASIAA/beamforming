@@ -18,9 +18,6 @@ asmfunc:
     push r14
     push r13
     push r12
-    push r11
-    push r10
-    push r9
     push rbp
     mov rbp, rsp
 
@@ -49,22 +46,18 @@ clearLp:
     dec rbx
     jnz clearLp
 
-    xor r9, r9
+    xor r15, r15
+    mov r14, rdx
 
 integralLp3:
-    mov r14, rdx
-    mov r15, r9
-    shl r15, 4
+    xor r13, r13
+    mov rbx, rdi
+;    prefetchnta [rdi]
+;    prefetchnta [rsi+r15+16384]
 
 integralLp2:
     mov r12, 4
-    mov r13, r9
     vmovdqa32 zmm14, [rsi+r15]
-    prefetchnta [rsi+r15+16384]
-
-    mov rbx, r9
-    shl rbx, 10
-    add rbx, rdi
 
 integralLp:
     ; unpack antenna data to [beam]
@@ -125,13 +118,16 @@ rowLp:
     dec r12
     jnz integralLp
 
-    add r15, 16384
-    dec r14
-    jnz integralLp2
+    add r15, 64
+    cmp r13, rcx
+    jb integralLp2
 
-    add r9, 4
-    cmp r9, rcx
-    jb integralLp3
+    mov rax, rcx
+    shl rax, 4
+    add r15, 16384
+    sub r15, rax
+    dec r14
+    jnz integralLp3
 
     ; copy to destination
     xor rax, rax
@@ -145,9 +141,6 @@ copyLp:
     jnz copyLp
 
     leave
-    pop r9
-    pop r10
-    pop r11
     pop r12
     pop r13
     pop r14
