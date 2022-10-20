@@ -1,3 +1,4 @@
+%define NR_4C 4
 default rel
 
     section .data
@@ -27,7 +28,6 @@ asmfunc:
     ; local variables
     and rsp, -64
     sub rsp, 128
-    lea r10, [rsp+64]
     lea r11, [rsp]
     mov rax, rcx
     shl rax, 6
@@ -49,22 +49,24 @@ clearLp:
     dec rbx
     jnz clearLp
 
-    xor r9, r9
+    xor r9, r9      ; starting channel
+
+integralLp4:
+    mov r14, rdx    ; nr_packet
+    mov r15, r9
+    shl r15, 4      ; data offset
 
 integralLp3:
-    mov r14, rdx
-    mov r15, r9
-    shl r15, 4
+    mov r13, r9     ; current channel
+    mov rbx, r9
+    shl rbx, 10
+    add rbx, rdi    ; matrix pointer
+    mov r10, NR_4C
 
 integralLp2:
     mov r12, 4
-    mov r13, r9
     vmovdqa32 zmm14, [rsi+r15]
     prefetchnta [rsi+r15+16384]
-
-    mov rbx, r9
-    shl rbx, 10
-    add rbx, rdi
 
 integralLp:
     ; unpack antenna data to [beam]
@@ -83,7 +85,7 @@ integralLp:
 
     ; (imag, real)
     vpermw zmm1, zmm13, zmm0
-    vmovdqu16 [r10], zmm1
+    vmovdqu16 [r11+64], zmm1
 
     ; (real, -imag)
     vpmullw zmm1, zmm0, zmm12
@@ -94,7 +96,7 @@ integralLp:
     vpxord zmm11, zmm11, zmm11
 
     xor rax, rax
-;    mov rbx, rdi
+
 rowLp:
     ; load a column from matrix
     vmovdqu16 zmm0, [rbx]
@@ -103,7 +105,7 @@ rowLp:
     vpdpwssd zmm10, zmm0, [r11+rax*4]{1to16}
 
     ; calculate imag part
-    vpdpwssd zmm11, zmm0, [r10+rax*4]{1to16}
+    vpdpwssd zmm11, zmm0, [r11+rax*4+64]{1to16}
 
     add rbx, 64
     inc rax
@@ -125,13 +127,17 @@ rowLp:
     dec r12
     jnz integralLp
 
-    add r15, 16384
-    dec r14
+    add r15, 64
+    dec r10
     jnz integralLp2
 
-    add r9, 4
+    add r15, 16384 - NR_4C * 64
+    dec r14
+    jnz integralLp3
+
+    add r9, NR_4C * 4
     cmp r9, rcx
-    jb integralLp3
+    jb integralLp4
 
     ; copy to destination
     xor rax, rax
