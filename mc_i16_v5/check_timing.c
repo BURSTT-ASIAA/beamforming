@@ -136,11 +136,11 @@ main(int argc, char **argv)
 
 	end = clock();
 	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-	printf("Total cores: %d  Total CPU time: %.3f  Average time: %.3f\n",
+	printf("Total lcores: %d  Total CPU time: %.3f  Average time: %.3f\n",
 			ncores, cpu_time_used, cpu_time_used/ncores);
 
 	for (i=0; i<ncores; i++) {
-		printf("CPU core #%2d  min:avg:max %.3f:%.3f:%.3f\n", i,
+		printf("DPDK lcore #%2d  min:avg:max %.3f:%.3f:%.3f\n", i,
 				min_t[i]*NR_run, avg_t[i]/NR_run*NR_run, max_t[i]*NR_run);
 	}
 
