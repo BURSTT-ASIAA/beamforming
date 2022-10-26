@@ -5,7 +5,7 @@
 APP = mc_test
 
 # all source are stored in SRCS-y
-SRCS-y := check_timing.c
+SRCS-y := check_timingx.c
 ASM_FILE = build/asmfunc_vnni.o
 
 PKGCONF ?= pkg-config
