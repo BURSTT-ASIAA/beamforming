@@ -37,6 +37,8 @@ typedef struct {
 
 int asmfunc(short *mat, char *vec, long nr, long nc, float *dest);
 
+const unsigned mem_node[4] = {0, 1, 2, 3};
+
 /* Launch a function on lcore. 8< */
 static int
 lcore_math(void *arg)
@@ -82,7 +84,7 @@ int
 main(int argc, char **argv)
 {
 	int ret;
-	unsigned lcore_id;
+	unsigned lcore_id, socket_id;
 	char *vec[NR_FPGA];
 	short mat[16*16*2*1024];
 	float *dest[NR_FPGA];
@@ -100,14 +102,13 @@ main(int argc, char **argv)
 
 	/* Create the data buffer */
 	for (i=0; i<NR_FPGA; i++) {
-		vec[i] = rte_malloc_socket(NULL, 1024*16*NR_pack, 0x40, i);
+		vec[i] = rte_malloc_socket(NULL, 1024*16*NR_pack, 0x40, mem_node[i]);
 		if (vec[i] == NULL)
 			rte_exit(EXIT_FAILURE, "Cannot init data buffer\n");
-		dest[i] = rte_malloc_socket(NULL, 1024*64*NR_run, 0x40, i);
+		dest[i] = rte_malloc_socket(NULL, 1024*64*NR_run, 0x40, mem_node[i]);
 		if (dest[i] == NULL)
 			rte_exit(EXIT_FAILURE, "Cannot init sum buffer\n");
 	}
-//	printf("\nDPDK socket id %2d\n", rte_socket_id());
 
 	// transposed matrix
 	for (k=0; k<1024; k++)
@@ -141,12 +142,12 @@ main(int argc, char **argv)
 			params[i].dest = dest[k] + j * NR_ch * 16;
 			rte_eal_remote_launch(lcore_math, &params[i], lcore_id);
 			i++;
-			k++;
-			if (k >= NR_FPGA) {
-				k = 0;
-				j++;
+			j++;
+			if (j >= NR_cpu) {
+				j = 0;
+				k++;
 			}
-			if (j >= NR_cpu) break;
+			if (k >= NR_FPGA) break;
 		}
 		ncores = i;
 
@@ -171,11 +172,12 @@ main(int argc, char **argv)
 
 		for (i=0; i<ncores; i++) {
 			lcore_id = params[i].lcore_id;
+			socket_id = rte_lcore_to_socket_id(lcore_id);
 			min_t = params[i].min_t;
 			max_t = params[i].max_t;
 			avg_t = params[i].avg_t;
-			printf("%2d) DPDK lcore %3d  min:avg:max %.3f:%.3f:%.3f\n", i,
-					lcore_id, min_t*1000, avg_t*1000, max_t*1000);
+			printf("%2d) DPDK lcore %3d(%d)  min:avg:max %.3f:%.3f:%.3f\n", i,
+					lcore_id, socket_id, min_t*1000, avg_t*1000, max_t*1000);
 		}
 	}
 
