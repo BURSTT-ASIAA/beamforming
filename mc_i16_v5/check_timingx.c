@@ -176,8 +176,8 @@ main(int argc, char **argv)
 			min_t = params[i].min_t;
 			max_t = params[i].max_t;
 			avg_t = params[i].avg_t;
-			printf("%2d) DPDK lcore %3d(%d)  min:avg:max %.3f:%.3f:%.3f\n", i,
-					lcore_id, socket_id, min_t*1000, avg_t*1000, max_t*1000);
+			printf("%2d) DPDK lcore %3d(%d:%d)  min:avg:max %.3f:%.3f:%.3f\n", i,
+					lcore_id, socket_id, mem_node[i/NR_cpu], min_t*1000, avg_t*1000, max_t*1000);
 		}
 	}
 
