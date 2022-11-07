@@ -1,5 +1,5 @@
 %define NR_4C 4
-%define DATA_OFF 16384
+%define DATA_OFF (8192 + 64) * 2
 default rel
 
     section .data
