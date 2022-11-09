@@ -28,6 +28,7 @@
 #define NR_REPEAT 50
 #define DATA_SIZE (8192 + 64) * 2
 #define DATA_HEADER 64
+#define NR_BUFFER 4
 
 typedef struct __attribute__ ((aligned (64))) {
 	short *mat;
@@ -36,9 +37,20 @@ typedef struct __attribute__ ((aligned (64))) {
 	long nc;
 	long repeat;
 	float *dest;
-	int *d_count;
-	volatile bool filled;
+	bool filled;
+	bool notify;
 } task_s;
+typedef struct __attribute__ ((aligned (64))) {
+	bool *notify_p[NR_cpu];
+	void *data_p;
+	long length;
+	bool filled;
+} status_s;
+typedef struct {
+	void *data_p;
+	long length;
+	bool *filled_p;
+} ring_s;
 
 int asmfunc(short *mat, char *vec, long nr, long nc, float *dest);
 
@@ -52,15 +64,14 @@ const char *fpga_fn[] = {
 volatile int quit_signal = false;
 
 /* Launch a function on lcore. 8< */
-static int
-lcore_integral(void *arg)
+static int lcore_integral(void *arg)
 {
 	task_s *params = arg;
 	char *vec;
 	float *dest;
 	long i;
-	float time_used;
-	struct timeval start_t, end_t;
+//	float time_used;
+//	struct timeval start_t, end_t;
 
 	while (!quit_signal) {
 		if (!params->filled) {
@@ -68,7 +79,7 @@ lcore_integral(void *arg)
 			continue;
 		}
 
-		gettimeofday(&start_t, NULL);
+//		gettimeofday(&start_t, NULL);
 		vec = params->vec;
 		dest = params->dest;
 		for (i=0; i<params->repeat; i++) {
@@ -76,9 +87,11 @@ lcore_integral(void *arg)
 			vec += DATA_SIZE * params->nr;
 			dest += 1024 * 16;
 		}
+//		(*params->counter)++;
+		params->notify = true;
 		params->filled = false;
-		gettimeofday(&end_t, NULL);
-		time_used = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_usec - start_t.tv_usec) / 1000000.;
+//		gettimeofday(&end_t, NULL);
+//		time_used = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_usec - start_t.tv_usec) / 1000000.;
 //		printf("lcores #%d,  Real time: %3f\n", rte_lcore_id(), time_used);
 	}
 
@@ -86,20 +99,78 @@ lcore_integral(void *arg)
 }
 /* >8 End of launching function on lcore. */
 
+static int lcore_socket(void *arg)
+{
+	status_s *status_p;
+	int counter[NR_FPGA*NR_BUFFER];
+	int mask_arr[NR_FPGA*NR_BUFFER], mask;
+	int i, j;
+	ring_s rings[NR_FPGA*NR_BUFFER], *ring_p;
+	int ring_head, ring_tail;
+
+	for (i=0; i<NR_FPGA*NR_BUFFER; i++) {
+		counter[i] = 0;
+		mask_arr[i] = 0;
+	}
+	ring_head = 0;
+	ring_tail = 0;
+
+	while (!quit_signal) {
+		status_p = arg;
+		for (i=0; i<NR_FPGA*NR_BUFFER; i++, status_p++) {
+			if (!status_p->filled) continue;
+
+//			printf("get notify fpga%d[%d], pointer:%p\n",
+//					i/NR_BUFFER, i%NR_BUFFER, status_p);
+			mask = 1;
+			for (j=0; j<NR_cpu; j++, mask<<=1) {
+				if (mask_arr[i] & mask) continue;
+
+				if (*status_p->notify_p[j]) {
+					mask_arr[i] |= mask;
+					*status_p->notify_p[j] = false;
+					counter[i]++;
+				}
+			}
+
+			if (counter[i] >= NR_cpu) {
+				mask_arr[i] = 0;
+				counter[i] = 0;
+				rings[ring_head].data_p = status_p->data_p;
+				rings[ring_head].length = status_p->length;
+				rings[ring_head].filled_p = &status_p->filled;
+				ring_head++;
+				if (ring_head >= NR_FPGA*NR_BUFFER) ring_head = 0;
+			}
+		}
+
+		if (ring_head != ring_tail) {
+			ring_p = &rings[ring_tail];
+//			printf("Buffer(%p) filled, sending packets(%lx)...\n", ring_p->data_p, ring_p->length);
+			*ring_p->filled_p = false;
+			ring_tail++;
+			if (ring_tail >= NR_FPGA*NR_BUFFER) ring_tail = 0;
+			usleep(100);
+		} else {
+			usleep(1000);
+		}
+	}
+}
+
 /* find a feee lcore or wait */
-int find_lcore(task_s *tasks, int ncores) {
+static int find_lcore(task_s *tasks, int ncores)
+{
 	int i;
 
 	while (true) {
 		for (i=0; i<ncores; i++)
-			if (!tasks[i].filled) return i;
+			if (!tasks[i].filled && !tasks[i].notify) return i;
 		usleep(1000);
 	}
 }
 
 /* Initialization of Environment Abstraction Layer (EAL). 8< */
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	int fd, ret;
 	unsigned lcore_id, socket_id;
@@ -110,13 +181,17 @@ main(int argc, char **argv)
 	task_s params[RTE_MAX_LCORE];
 	struct stat sb[NR_FPGA];
 	unsigned lcores[RTE_MAX_LCORE];
-	long offset;
+	long offset, length;
+	int b_index[NR_FPGA];
+	status_s status[NR_FPGA*NR_BUFFER];
+	status_s *status_p;
 
 	ret = rte_eal_init(argc, argv);
 	if (ret < 0)
 		rte_panic("Cannot init EAL\n");
 
 	/* Retrieve the data buffer */
+	length = NR_run * NR_cpu * NR_ch * 16;
 	for (i=0; i<NR_FPGA; i++) {
 		fd = open(fpga_fn[i], O_RDONLY);
 		if (fd < 0)
@@ -130,9 +205,10 @@ main(int argc, char **argv)
 		if (vec[i] == MAP_FAILED)
 			rte_exit(EXIT_FAILURE, "Cannot mmap data buffer\n");
 
-		dest[i] = rte_malloc_socket(NULL, 1024*64*NR_run, 0x40, mem_node[i]);
+		dest[i] = rte_malloc_socket(NULL, 4 * length * NR_BUFFER, 0x40, mem_node[i]);
 		if (dest[i] == NULL)
 			rte_exit(EXIT_FAILURE, "Cannot init integral buffer\n");
+		b_index[i] = 0;
 	}
 
 	// transposed matrix
@@ -145,12 +221,28 @@ main(int argc, char **argv)
 				mat[p + 1] = 0;
 			}
 
-	/* Launches the function on each lcore. 8< */
-	i = 0;
+	// init status_s
+	status_p = status;
+	for (i=0; i<NR_FPGA; i++)
+		for (j=0; j<NR_BUFFER; j++) {
+			status_p->filled = false;
+			status_p->data_p = (void *)dest[i] + 4 * j * length;
+			status_p->length = length * 4;
+			status_p++;
+		}
+
+	/* Launches the socket+integral functions on lcores. 8< */
+	i = -1;
 	RTE_LCORE_FOREACH_WORKER(lcore_id) {
-		params[i].filled = false;
-		rte_eal_remote_launch(lcore_integral, &params[i], lcore_id);
-		lcores[i] = lcore_id;
+		if (i < 0) {
+			// socketfunction
+			rte_eal_remote_launch(lcore_socket, status, lcore_id);
+		} else {
+			// integral funtion
+			params[i].filled = false;
+			rte_eal_remote_launch(lcore_integral, &params[i], lcore_id);
+			lcores[i] = lcore_id;
+		}
 		i++;
 	}
 	ncores = i;
@@ -158,7 +250,12 @@ main(int argc, char **argv)
 	for (p=0; p<NR_REPEAT; p++) {
 		printf("\n====== Test #%d ======\n", p+1);
 		for (k=0; k<NR_FPGA; k++) {
-			printf("Process fpga#%d  cpus:", k);
+			status_p = status + k * NR_BUFFER + b_index[k];
+			if (status_p->filled) {
+				printf("output buffer is not empty: fpga%d[%d]\n", k, b_index[k]);
+			}
+
+			printf("Processing fpga#%d  cpus:", k);
 			for (j=0; j<NR_cpu; j++) {
 				i = find_lcore(params, ncores);
 				if (j * NR_ch < 512)
@@ -173,12 +270,17 @@ main(int argc, char **argv)
 				else
 					params[i].nc = 1024 - j * NR_ch;
 				params[i].repeat = NR_run;
-				params[i].dest = dest[k] + j * NR_ch * 16;
+				params[i].dest = dest[k] + j * NR_ch * 16 + b_index[k] * length;
 				params[i].filled = true;
+				status_p->notify_p[j] = &params[i].notify;
 
 				printf(" %d", lcores[i]);
 			}
 			printf("\n");
+
+			status_p->filled = true;
+			b_index[k]++;
+			if (b_index[k] >= NR_BUFFER) b_index[k] = 0;
 		}
 	}
 
