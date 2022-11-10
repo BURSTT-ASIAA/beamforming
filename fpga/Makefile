@@ -36,7 +36,7 @@ $(error "Cannot generate statically-linked binaries with this version of pkg-con
 endif
 endif
 
-CFLAGS += -DALLOW_EXPERIMENTAL_API
+CFLAGS += -DALLOW_EXPERIMENTAL_API -lrt
 
 build/$(APP)-shared: $(SRCS-y) Makefile $(PC_FILE) $(ASM_FILE) | build
 	$(CC) $(CFLAGS) $(SRCS-y) build/asmfunc_vnni.o -o $@ $(LDFLAGS) $(LDFLAGS_SHARED)

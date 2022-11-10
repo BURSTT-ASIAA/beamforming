@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <mqueue.h>
 
 #include <rte_memory.h>
 #include <rte_launch.h>
@@ -20,15 +21,15 @@
 #include <rte_malloc.h>
 
 //#define NR_pack 400*1000UL // 6.4G
-#define NR_sum 400UL  // integral count
+#define NR_sum 500UL  // integral count
 #define NR_run 1000UL // NR_pack / NR_sum
 #define NR_ch 128UL // must be multiple of 16
 #define NR_cpu 8 // 1024 / NR_ch
 #define NR_FPGA 4
-#define NR_REPEAT 50
 #define DATA_SIZE (8192 + 64) * 2
 #define DATA_HEADER 64
 #define NR_BUFFER 4
+#define BLOCK_SIZE DATA_SIZE * NR_sum * NR_run
 
 typedef struct __attribute__ ((aligned (64))) {
 	short *mat;
@@ -181,10 +182,24 @@ int main(int argc, char **argv)
 	task_s params[RTE_MAX_LCORE];
 	struct stat sb[NR_FPGA];
 	unsigned lcores[RTE_MAX_LCORE];
-	long offset, length;
+	long offset, offset0, length;
 	int b_index[NR_FPGA];
 	status_s status[NR_FPGA*NR_BUFFER];
 	status_s *status_p;
+	mqd_t mqueue;
+	struct {
+		int fpga;
+		int index;
+		char padding[8];
+	} mq_data;
+	int priority;
+	ssize_t len;
+
+	mqueue = mq_open("/burstt", O_RDONLY);
+	if (mqueue == (mqd_t) -1) {
+		printf("Error open mqueue...\n");
+		return 0;
+	}
 
 	ret = rte_eal_init(argc, argv);
 	if (ret < 0)
@@ -247,46 +262,58 @@ int main(int argc, char **argv)
 	}
 	ncores = i;
 
-	for (p=0; p<NR_REPEAT; p++) {
-		printf("\n====== Test #%d ======\n", p+1);
-		for (k=0; k<NR_FPGA; k++) {
-			status_p = status + k * NR_BUFFER + b_index[k];
-			if (status_p->filled) {
-				printf("output buffer is not empty: fpga%d[%d]\n", k, b_index[k]);
-			}
-
-			printf("Processing fpga#%d  cpus:", k);
-			for (j=0; j<NR_cpu; j++) {
-				i = find_lcore(params, ncores);
-				if (j * NR_ch < 512)
-					offset = DATA_HEADER;
-				else
-					offset = DATA_HEADER * 2;
-				params[i].mat = mat + j * NR_ch * 512;
-				params[i].vec = vec[k] + j * NR_ch * 16 + offset;
-				params[i].nr = NR_sum;
-				if ((j+1) * NR_ch <= 1024)
-					params[i].nc = NR_ch;
-				else
-					params[i].nc = 1024 - j * NR_ch;
-				params[i].repeat = NR_run;
-				params[i].dest = dest[k] + j * NR_ch * 16 + b_index[k] * length;
-				params[i].filled = true;
-				status_p->notify_p[j] = &params[i].notify;
-
-				printf(" %d", lcores[i]);
-			}
-			printf("\n");
-
-			status_p->filled = true;
-			b_index[k]++;
-			if (b_index[k] >= NR_BUFFER) b_index[k] = 0;
+	while(true) {
+		len = mq_receive(mqueue, (void *)&mq_data, sizeof(mq_data), &priority);
+		printf("Data in-> length:%d, fpga#%d, index:%d, priority:%d\n",
+				len, mq_data.fpga, mq_data.index, priority);
+		k = mq_data.fpga;
+		offset0 = mq_data.index * BLOCK_SIZE;
+		if (k < 0) {
+			printf("Quit the process.....\n");
+			break;
 		}
+
+		status_p = status + k * NR_BUFFER + b_index[k];
+		if (status_p->filled) {
+			printf("output buffer is not empty: fpga%d[%d]\n", k, b_index[k]);
+		}
+
+		printf("Processing fpga#%d  cpus:", k);
+		for (j=0; j<NR_cpu; j++) {
+			i = find_lcore(params, ncores);
+			if (j * NR_ch < 512)
+				offset = offset0 + DATA_HEADER;
+			else
+				offset = offset0 + DATA_HEADER * 2;
+			params[i].mat = mat + j * NR_ch * 512;
+			params[i].vec = vec[k] + j * NR_ch * 16 + offset;
+			params[i].nr = NR_sum;
+			if ((j+1) * NR_ch <= 1024)
+				params[i].nc = NR_ch;
+			else
+				params[i].nc = 1024 - j * NR_ch;
+			params[i].repeat = NR_run;
+			params[i].dest = dest[k] + j * NR_ch * 16 + b_index[k] * length;
+			params[i].filled = true;
+			status_p->notify_p[j] = &params[i].notify;
+
+			printf(" %d", lcores[i]);
+		}
+		printf("\n");
+
+		status_p->filled = true;
+		b_index[k]++;
+		if (b_index[k] >= NR_BUFFER) b_index[k] = 0;
 	}
 
 	// quit
 	for (i=0; i<ncores; i++)
 		while (params[i].filled) usleep(1000);
+	status_p = status;
+	for (i=0; i<NR_FPGA*NR_BUFFER; i++) {
+		while (status_p->filled) usleep(1000);
+		status_p++;
+	}
 	quit_signal = true;
 
 	/* clean up the EAL */
@@ -296,5 +323,6 @@ int main(int argc, char **argv)
 	}
 	rte_eal_cleanup();
 
+	mq_close(mqueue);
 	return 0;
 }
