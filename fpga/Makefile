@@ -7,6 +7,7 @@ APP = integral
 # all source are stored in SRCS-y
 SRCS-y := integral.c
 ASM_FILE = build/asmfunc_vnni.o
+ASM_SRC = asmfunc_vnni_ch2.asm
 
 PKGCONF ?= pkg-config
 
@@ -52,8 +53,8 @@ clean:
 	rm -f build/$(APP) build/$(APP)-static build/$(APP)-shared build/asmfunc_vnni.o
 	test -d build && rmdir -p build || true
 
-$(ASM_FILE): Makefile asmfunc_vnni.asm | build
-	nasm -f elf64 -o $@ asmfunc_vnni.asm
+$(ASM_FILE): Makefile $(ASM_SRC) | build
+	nasm -f elf64 -o $@ $(ASM_SRC)
 
 mqueue: mqueue.c
 	$(CC) -o mqueue mqueue.c -lrt
