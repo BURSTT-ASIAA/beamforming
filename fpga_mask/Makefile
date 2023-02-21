@@ -58,3 +58,9 @@ $(ASM_FILE): Makefile $(ASM_SRC) | build
 
 mqueue: mqueue.c
 	$(CC) -o mqueue mqueue.c -lrt
+
+ramdisk: ramdisk.c build/fp16.o
+	$(CC) -o ramdisk ramdisk.c build/fp16.o
+
+build/fp16.o: fp16.asm
+	nasm -f elf64 -o $@ fp16.asm
