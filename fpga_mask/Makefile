@@ -5,7 +5,7 @@
 APP = integral
 
 # all source are stored in SRCS-y
-SRCS-y := integral.c
+SRCS-y := check_values.c
 ASM_FILE = build/asmfunc_vnni.o
 ASM_SRC = asmfunc_vnni.asm
 
@@ -40,10 +40,10 @@ endif
 CFLAGS += -DALLOW_EXPERIMENTAL_API -lrt
 
 build/$(APP)-shared: $(SRCS-y) Makefile $(PC_FILE) $(ASM_FILE) | build
-	$(CC) $(CFLAGS) $(SRCS-y) build/asmfunc_vnni.o -o $@ $(LDFLAGS) $(LDFLAGS_SHARED)
+	$(CC) $(CFLAGS) $(SRCS-y) build/asmfunc_vnni.o build/fp16.o -o $@ $(LDFLAGS) $(LDFLAGS_SHARED)
 
 build/$(APP)-static: $(SRCS-y) Makefile $(PC_FILE) $(ASM_FILE) | build
-	$(CC) $(CFLAGS) $(SRCS-y) build/asmfunc_vnni.o -o $@ $(LDFLAGS) $(LDFLAGS_STATIC)
+	$(CC) $(CFLAGS) $(SRCS-y) build/asmfunc_vnni.o build/fp16.o -o $@ $(LDFLAGS) $(LDFLAGS_STATIC)
 
 build:
 	@mkdir -p $@

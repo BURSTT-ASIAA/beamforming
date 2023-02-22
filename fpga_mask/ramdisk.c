@@ -9,7 +9,7 @@
 #define RAMDISK_LENGTH 1024*16*2*4000*60L
 #define BLOCK_LENGTH 1024*16*2
 
-void f16convert(void *, void *);
+void f32tof16(void *, void *);
 
 int main(int argc, char **argv)
 {
@@ -32,7 +32,7 @@ int main(int argc, char **argv)
 			input[j][k] = j + k;
 		}
 	}
-	f16convert(output, input);
+	f32tof16(output, input);
 
 	ptr = buffer;
 	for (j=0; j<4; j++) {
