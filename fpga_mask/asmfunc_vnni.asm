@@ -184,9 +184,9 @@ passMask:
     mov rbx, rcx
 
 copyLp:
-    vmovaps zmm0, [rsp+rax]
-    vmovaps [r8+rax], zmm0
-    add rax, 64
+    vmovaps zmm0, [rsp+rax*2]
+    vcvtps2ph [r8+rax], zmm0, 0
+    add rax, 32
     dec rbx
     jnz copyLp
 
