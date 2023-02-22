@@ -34,9 +34,8 @@
 #define NR_BUFFER 4
 #define BLOCK_SIZE DATA_SIZE * NR_sum * NR_run
 #define MASK_OFFSET (8192 + 64) *  4000000L
-#define UDP_PORT 20001
-#define UDP_IP "127.0.0.1"
-#define UDP_LENGTH 32768
+#define RAMDISK "/bonsai/beams.bin"
+#define RAMDISK_SIZE 1024*16*2*4000*60L
 
 typedef struct __attribute__ ((aligned (64))) {
 	short *mat;
@@ -114,12 +113,12 @@ static int lcore_socket(void *arg)
 	int counter[NR_FPGA*NR_BUFFER];
 	int mask_arr[NR_FPGA*NR_BUFFER], mask;
 	int i, j;
-	long len, slen;
+	long len, offset = 0;
 	char *data_p;
 	ring_s rings[NR_FPGA*NR_BUFFER], *ring_p;
 	int ring_head, ring_tail;
-	int sockfd;
-	struct sockaddr_in servaddr;
+	int fd;
+	char *buffer, *ptr;
 
 	for (i=0; i<NR_FPGA*NR_BUFFER; i++) {
 		counter[i] = 0;
@@ -128,17 +127,12 @@ static int lcore_socket(void *arg)
 	ring_head = 0;
 	ring_tail = 0;
 
-	// Creating socket file descriptor
-	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-		printf("socket creation failed\n");
-
-	} else {
-		memset(&servaddr, 0, sizeof(servaddr));
-
-		// Filling server information
-		servaddr.sin_family = AF_INET;
-		servaddr.sin_port = htons(UDP_PORT);
-		servaddr.sin_addr.s_addr = inet_addr(UDP_IP);
+	// open the NFS ramdisk
+	fd = open(RAMDISK, O_RDWR);
+	buffer = mmap(NULL, RAMDISK_SIZE, PROT_WRITE, MAP_SHARED, fd, 0);
+	close(fd);
+	if(buffer == MAP_FAILED){
+		printf("Mapping ramdisk failed\n");
 	}
 
 	while (!quit_signal) {
@@ -173,16 +167,17 @@ static int lcore_socket(void *arg)
 		while (ring_head != ring_tail) {
 			ring_p = &rings[ring_tail];
 //			printf("Buffer(%p) filled, sending packets(%lx)...\n", ring_p->data_p, ring_p->length);
-			if (sockfd >= 0) {
+
+			if(buffer != MAP_FAILED){
 				len = ring_p->length;
 				data_p = ring_p->data_p;
-				while (len > 0) {
-					slen = len;
-					if (slen > UDP_LENGTH) slen = UDP_LENGTH;
-					sendto(sockfd, (const char *) data_p, slen, 0,
-						(const struct sockaddr *) &servaddr, sizeof(servaddr));
-					len -= slen;
-					data_p += slen;
+				ptr = buffer + offset;
+
+				memcpy(ptr, data_p, len);
+				msync(ptr, len, MS_SYNC);
+				offset += len;
+				if (offset + len > RAMDISK_SIZE) {
+					offset = 0;
 				}
 			}
 			*ring_p->filled_p = false;
@@ -192,6 +187,8 @@ static int lcore_socket(void *arg)
 
 		usleep(1000);
 	}
+
+	munmap(buffer, RAMDISK_SIZE);
 }
 
 /* find a feee lcore or wait */
