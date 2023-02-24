@@ -5,6 +5,8 @@
 %define cur_mask [r11+136]
 %define bmask [r11+144]
 %define cur_bmask [r11+152]
+%define parm1 [rbp+80]
+%define parm2 [rbp+88]
 default rel
 
     section .data
@@ -121,7 +123,6 @@ integralLp:
     vpxord zmm11, zmm11, zmm11
 
     xor rax, rax
-
 rowLp:
     ; load a column from matrix
     vmovdqu16 zmm0, [rbx]
@@ -137,6 +138,16 @@ rowLp:
     cmp rax, 16
     jb rowLp
 
+    ; store voltage data
+    mov rax, parm1
+    cmp rax, 0
+    jl noBeams
+    ; one byte data
+    mov rax, parm2
+    mov byte [rax], 1
+    inc qword parm2
+
+noBeams:
     ; integral
     vcvtdq2ps zmm10, zmm10
     vcvtdq2ps zmm11, zmm11
@@ -157,7 +168,20 @@ rowLp:
     jnz integralLp2
 
     sub r15, NR_2C * 32
+    jmp noBeam
+
 passPkt:
+    ; store zero voltage data
+    mov rax, parm1
+    cmp rax, 0
+    jl noBeam
+    ; assume NR_2C=8, 16 bytes
+    pxor xmm0, xmm0
+    mov rax, parm2
+    movdqa [rax], xmm0
+    add qword parm2, NR_2C * 2
+
+noBeam:
     mov rax, cur_bmask
     mov rbx, rax
     shl rax, 2
@@ -171,10 +195,15 @@ passPkt:
 passMask:
     mov cur_bmask, rax
 
+    add qword parm2, 1024 -  NR_2C * 2
     add r15, DATA_OFF
     dec r14
     jnz integralLp3
 
+    mov rax, rdx
+    shl rax, 10
+    sub rax, NR_2C * 2
+    sub qword parm2, rax
     add r9, NR_2C * 2
     cmp r9, rcx
     jb integralLp4

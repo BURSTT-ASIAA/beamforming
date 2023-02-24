@@ -25,9 +25,11 @@ typedef struct {
 	long nc;
 	void *dest;
 	char *mask;
+	long beamid;
+	void *voltage;
 } parStruct;
 
-int asmfunc(short *mat, char *vec, long nr, long nc, void *dest, char *mask);
+int asmfunc(short *mat, char *vec, long nr, long nc, void *dest, char *mask, long beamid, void *voltage);
 void f16tof32(void *dest, void *src);
 
 /* Launch a function on lcore. 8< */
@@ -39,8 +41,7 @@ lcore_math(void *arg)
 
 	lcore_id = rte_lcore_id();
 	printf("hello from core %u\n", lcore_id);
-	asmfunc(params->mat, params->vec, params->nr, params->nc, params->dest, params->mask);
-
+	asmfunc(params->mat, params->vec, params->nr, params->nc, params->dest, params->mask, params->beamid, params->voltage);
 	return 0;
 }
 /* >8 End of launching function on lcore. */
@@ -56,8 +57,10 @@ main(int argc, char **argv)
 	short mat[16*16*2*1024];
 	char dest[16*1024*2] __attribute__ ((aligned (64)));
 	float dest2[16*1024];
+	char *voltage;
 	int i, j, k, n, p, p2, ncores;
 	parStruct params[RTE_MAX_LCORE];
+	long beamid = 0;
 
 	ret = rte_eal_init(argc, argv);
 	if (ret < 0)
@@ -69,13 +72,16 @@ main(int argc, char **argv)
 	mask = malloc(n);
 	lmask = (unsigned long *) mask;
 	for (i=0; i<n/8; i++) {
-		lmask[i] = 0x0000000000000006;
+		lmask[i] = 0x000000000000000f;
 	}
 
 	/* Create the data buffer */
 	vec = rte_malloc_socket(NULL, NR_pack*1024*16, 0x40, rte_socket_id());
 	if (vec == NULL)
 			rte_exit(EXIT_FAILURE, "Cannot init data buffer\n");
+	voltage = rte_malloc_socket(NULL, NR_pack*1024, 0x40, rte_socket_id());
+	if (voltage == NULL)
+			rte_exit(EXIT_FAILURE, "Cannot init voltage buffer\n");
 
 	// transposed matrix
 	for (k=0; k<1024; k++)
@@ -115,7 +121,9 @@ main(int argc, char **argv)
 		params[i].nr = NR_pack;
 		params[i].nc = NR_ch;
 		params[i].dest = dest + i * NR_ch * 16 * 2;
-		params[i].mask = mask + (i * NR_ch / 512);
+		params[i].mask = mask + i * NR_ch / 512;
+		params[i].beamid = beamid;
+		params[i].voltage = voltage + i * NR_ch;
 		rte_eal_remote_launch(lcore_math, &params[i], lcore_id);
 		i++;
 		lcore_id = rte_get_next_lcore(lcore_id, 1, 0);
@@ -129,6 +137,8 @@ main(int argc, char **argv)
 	params[0].nc = NR_ch;
 	params[0].dest = dest;
 	params[0].mask = mask;
+	params[0].beamid = beamid;
+	params[0].voltage = voltage;
 	lcore_math(&params[0]);
 	/* >8 End of launching the function on each lcore. */
 
@@ -158,10 +168,19 @@ main(int argc, char **argv)
 		}
 		printf("\n");
 	}
+	printf("\nVoltage:\n");
+	for (i=0; i<32; i++) {
+		for (j=0; j<32; j++) {
+			p = i* 32 + j;
+			printf(" %hhx", voltage[p]);
+		}
+		printf("\n");
+	}
 
 	/* clean up the EAL */
 	free(mask);
 	rte_free(vec);
+	rte_free(voltage);
 	rte_eal_cleanup();
 
 	return 0;
