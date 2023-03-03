@@ -14,7 +14,7 @@
 #include <rte_debug.h>
 #include <rte_malloc.h>
 
-#define NR_pack 2L
+#define NR_pack 1L
 #define NR_ch 128UL
 #define NR_cpu 8
 
@@ -60,7 +60,7 @@ main(int argc, char **argv)
 	char *voltage;
 	int i, j, k, n, p, p2, ncores;
 	parStruct params[RTE_MAX_LCORE];
-	long beamid = 0;
+	long beamid = 8;
 
 	ret = rte_eal_init(argc, argv);
 	if (ret < 0)
@@ -92,10 +92,10 @@ main(int argc, char **argv)
 				p2 = p + 1;
 //				if (i == j && (k % 2) == 0) {
 				if (i == j) {
-					mat[p] = 1;
+					mat[p] = 256;
 					mat[p2] = 0;
 				} else {
-					mat[p] = 0;
+					mat[p] = 256;
 					mat[p2] = 0;
 				}
 			}
@@ -104,8 +104,8 @@ main(int argc, char **argv)
 		for (j=0; j<1024; j++)
 			for (k=0; k<16; k++) {
 				p = (i * 1024 + j) * 16 + k;
-//				vec[p] = 1;
-				vec[p] = j % 256;
+				vec[p] = 0x88;
+//				vec[p] = j % 256;
 //				if (j % 2 != 0)
 //					vec[p] = 0;
 //				else
@@ -169,10 +169,13 @@ main(int argc, char **argv)
 		printf("\n");
 	}
 	printf("\nVoltage:\n");
-	for (i=0; i<32; i++) {
-		for (j=0; j<32; j++) {
-			p = i* 32 + j;
-			printf(" %hhx", voltage[p]);
+	for (k=0; k<NR_pack; k++) {
+		for (i=0; i<32; i++) {
+			for (j=0; j<32; j++) {
+				p = k * 1024 + i * 32 + j;
+				printf(" %hhx", voltage[p]);
+			}
+			printf("\n");
 		}
 		printf("\n");
 	}

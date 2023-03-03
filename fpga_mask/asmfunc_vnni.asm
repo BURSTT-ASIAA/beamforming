@@ -5,6 +5,8 @@
 %define cur_mask [r11+136]
 %define bmask [r11+144]
 %define cur_bmask [r11+152]
+%define voltage_ch [r11+160]
+%define voltage_data [r11+176]
 %define parm1 [rbp+80]
 %define parm2 [rbp+88]
 default rel
@@ -16,6 +18,7 @@ negImag:    times 16 dw 1, -1
 swapReIm:   dw  1,0,3,2,5,4,7,6,9,8,11,10,13,12,15,14
             dw  17,16,19,18,21,20,23,22,25,24,27,26,29,28,31,30
 bitMask:    times 16 dw 0xF0
+scaling:    dd 134217728.0  ; 2^27
 
     section .text
 
@@ -58,9 +61,17 @@ evenPkg:
 
     ; clear (sum for square)
     vxorps zmm0, zmm0, zmm0
+
+    ; calculate voltage index
+    movdqa voltage_ch, xmm0
+    mov rax, parm1
+    add rax, 16
+    shl rax, 32
+    add rax, parm1
+    mov voltage_ch, rax
+
     xor rax, rax
     mov rbx, rcx
-
 clearLp:
     vmovaps [rsp+rax], zmm0
     add rax, 64
@@ -142,9 +153,22 @@ rowLp:
     mov rax, parm1
     cmp rax, 0
     jl noBeams
+    ; calculating
+    vxorps zmm0, zmm0, zmm0
+    vmovdqa32 xmm0, voltage_ch
+    vpermi2d zmm0, zmm10, zmm11
+    vpmovsdw voltage_data, xmm0
+    shr dword voltage_data, 12
+    mov eax, voltage_data
+    and byte voltage_data, 0x0f
+    shr eax, 12
+    and al, 0xf0
+    or al, voltage_data
     ; one byte data
-    mov rax, parm2
-    mov byte [rax], 1
+    push rbx
+    mov rbx, parm2
+    mov [rbx], al
+    pop rbx
     inc qword parm2
 
 noBeams:
@@ -214,6 +238,7 @@ passMask:
 
 copyLp:
     vmovaps zmm0, [rsp+rax*2]
+    vdivps zmm0, zmm0, [scaling]{1to16}
     vcvtps2ph [r8+rax], zmm0, 0
     add rax, 32
     dec rbx
