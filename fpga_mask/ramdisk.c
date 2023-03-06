@@ -5,11 +5,13 @@
 #include <string.h>
 //#include <x86intrin.h>
 
-#define RAMDISK "/bonsai/beams.bin"
+//#define RAMDISK "/bonsai/beams.bin"
+#define RAMDISK "beams.bin"
 #define RAMDISK_LENGTH 1024*16*2*4000*60L
 #define BLOCK_LENGTH 1024*16*2
 
 void f32tof16(void *, void *);
+void f32tob16(void *, void *);
 
 int main(int argc, char **argv)
 {
@@ -32,7 +34,7 @@ int main(int argc, char **argv)
 			input[j][k] = j + k;
 		}
 	}
-	f32tof16(output, input);
+	f32tob16(output, input);
 
 	ptr = buffer;
 	for (j=0; j<4; j++) {
