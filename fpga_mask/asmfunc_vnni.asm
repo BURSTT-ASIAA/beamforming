@@ -18,6 +18,7 @@ negImag:    times 16 dw 1, -1
 swapReIm:   dw  1,0,3,2,5,4,7,6,9,8,11,10,13,12,15,14
             dw  17,16,19,18,21,20,23,22,25,24,27,26,29,28,31,30
 bitMask:    times 16 dw 0xF0
+pickOdd:	dw 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31
 scaling:    dd 134217728.0  ; 2^27
 
     section .text
@@ -235,11 +236,16 @@ passMask:
     ; copy to destination
     xor rax, rax
     mov rbx, rcx
+	vpxorq zmm1, zmm1, zmm1
+	vmovdqu16 ymm1, [pickOdd]
 
 copyLp:
-    vmovaps zmm0, [rsp+rax*2]
-    vdivps zmm0, zmm0, [scaling]{1to16}
-    vcvtps2ph [r8+rax], zmm0, 0
+;    vmovaps zmm0, [rsp+rax*2]
+;    vdivps zmm0, zmm0, [scaling]{1to16}
+;    vcvtps2ph [r8+rax], zmm0, 0
+    vpermw zmm0, zmm1, [rsp+rax*2]
+	vmovdqu16 [r8+rax], ymm0
+
     add rax, 32
     dec rbx
     jnz copyLp

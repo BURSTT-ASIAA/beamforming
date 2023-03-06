@@ -30,6 +30,7 @@ typedef struct {
 } parStruct;
 
 int asmfunc(short *mat, char *vec, long nr, long nc, void *dest, char *mask, long beamid, void *voltage);
+void b16tof32(void *dest, void *src);
 void f16tof32(void *dest, void *src);
 
 /* Launch a function on lcore. 8< */
@@ -56,7 +57,7 @@ main(int argc, char **argv)
 	unsigned long *lmask;
 	short mat[16*16*2*1024];
 	char dest[16*1024*2] __attribute__ ((aligned (64)));
-	float dest2[16*1024];
+	float dest2[16*1024] __attribute__ ((aligned (64)));
 	char *voltage;
 	int i, j, k, n, p, p2, ncores;
 	parStruct params[RTE_MAX_LCORE];
@@ -158,7 +159,7 @@ main(int argc, char **argv)
 		printf(" %hhx", vec[i]);
 	}
 	printf("\n");
-	f16tof32(dest2, dest);
+	b16tof32(dest2, dest);
 	printf("Dest:\n");
 	for (i=0; i<1024; i++) {
 		printf("channel %4d: ", i);
