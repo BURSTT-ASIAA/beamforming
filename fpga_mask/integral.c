@@ -24,7 +24,7 @@
 #include <rte_malloc.h>
 
 //#define NR_pack 400*1000UL // 6.4G
-#define NR_sum 500UL  // integral count
+#define NR_sum 400UL  // integral count
 #define NR_run 1000UL // NR_pack / NR_sum
 #define NR_ch 128UL // must be multiple of 16
 #define NR_cpu 8 // 1024 / NR_ch
@@ -36,14 +36,17 @@
 #define MASK_OFFSET (8192 + 64) *  4000000L
 #define RAMDISK "/bonsai/beams.bin"
 #define RAMDISK_SIZE 1024*16*2*4000*60L
+#define VOLTAGE_BLOCK NR_sum * NR_run * NR_cpu * NR_ch
 
 typedef struct __attribute__ ((aligned (64))) {
 	short *mat;
 	char *vec;
-	long nr;
-	long nc;
-	long repeat;
+	int nr;
+	int nc;
+	int repeat;
+	int beamid;
 	void *dest;
+	void *vdest;
 	char *mask;
 	bool filled;
 	bool notify;
@@ -70,6 +73,8 @@ const char *fpga_fn[] = {
 	"/mnt/fpga3/fpga.bin"
 };
 volatile int quit_signal = false;
+void *vbuffer;
+volatile int v_head=0, v_tail=0;
 
 /* Launch a function on lcore. 8< */
 static int lcore_integral(void *arg)
@@ -223,7 +228,8 @@ int main(int argc, char **argv)
 	struct {
 		int fpga;
 		int index;
-		char padding[8];
+		int beamid;
+		char padding[4];
 	} mq_data;
 	int priority;
 	ssize_t len;
@@ -260,6 +266,10 @@ int main(int argc, char **argv)
 		b_index[i] = 0;
 	}
 
+	vbuffer = rte_malloc(NULL, VOLTAGE_BLOCK * NR_BUFFER, 0x40);
+	if (vbuffer == NULL)
+		rte_exit(EXIT_FAILURE, "Cannot init voltage buffer\n");
+
 	// transposed matrix
 	for (k=0; k<1024; k++)
 		for (j=0; j<16; j++)
@@ -276,7 +286,7 @@ int main(int argc, char **argv)
 		for (j=0; j<NR_BUFFER; j++) {
 			status_p->filled = false;
 			status_p->data_p = dest[i] + 2 * j * length;
-			status_p->length = length * 4;
+			status_p->length = length * 2;
 			status_p++;
 		}
 
@@ -284,7 +294,7 @@ int main(int argc, char **argv)
 	i = -1;
 	RTE_LCORE_FOREACH_WORKER(lcore_id) {
 		if (i < 0) {
-			// socketfunction
+			// socket function
 			rte_eal_remote_launch(lcore_socket, status, lcore_id);
 		} else {
 			// integral funtion
@@ -356,6 +366,7 @@ int main(int argc, char **argv)
 		munmap(vec[i], sb[i].st_size);
 		rte_free(dest[i]);
 	}
+	rte_free(vbuffer);
 	rte_eal_cleanup();
 
 	mq_close(mqueue);

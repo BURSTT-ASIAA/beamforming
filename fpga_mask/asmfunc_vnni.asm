@@ -238,10 +238,11 @@ passMask:
     mov rbx, rcx
 	vpxorq zmm1, zmm1, zmm1
 	vmovdqu16 ymm1, [pickOdd]
+;    vbroadcastss zmm1, [scaling]
 
 copyLp:
 ;    vmovaps zmm0, [rsp+rax*2]
-;    vdivps zmm0, zmm0, [scaling]{1to16}
+;    vdivps zmm0, zmm0, zmm1
 ;    vcvtps2ph [r8+rax], zmm0, 0
     vpermw zmm0, zmm1, [rsp+rax*2]
 	vmovdqu16 [r8+rax], ymm0

@@ -5,8 +5,8 @@
 #include <string.h>
 //#include <x86intrin.h>
 
-//#define RAMDISK "/bonsai/beams.bin"
-#define RAMDISK "beams.bin"
+#define RAMDISK "/bonsai/beams.bin"
+//#define RAMDISK "beams.bin"
 #define RAMDISK_LENGTH 1024*16*2*4000*60L
 #define BLOCK_LENGTH 1024*16*2
 
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 	b16tof32(input, output);
 	printf("Convert value: %.2f %.2f %.2f %.2f\n", input[0][0], input[0][1], input[0][2], input[0][3]);
 	ptr = (char *)&input[0][0];
-	printf("Input value: %hhu %hhu %hhu %hhu", ptr[0], ptr[1], ptr[2], ptr[3]);
+	printf("Convert value: %hhu %hhu %hhu %hhu", ptr[0], ptr[1], ptr[2], ptr[3]);
 	printf(" %hhu %hhu %hhu %hhu\n", ptr[4], ptr[5], ptr[6], ptr[7]);
 
 	munmap(buffer, RAMDISK_LENGTH);
