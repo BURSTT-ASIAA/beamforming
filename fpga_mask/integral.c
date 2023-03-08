@@ -55,6 +55,7 @@ typedef struct __attribute__ ((aligned (64))) {
 	bool *notify_p[NR_cpu];
 	void *data_p;
 	long length;
+	int beamid;
 	bool filled;
 } status_s;
 typedef struct {
@@ -63,7 +64,7 @@ typedef struct {
 	bool *filled_p;
 } ring_s;
 
-int asmfunc(short *mat, char *vec, long nr, long nc, void *dest, char *mask);
+int asmfunc(short *mat, char *vec, long nr, long nc, void *dest, char *mask, long beamid, void *voltage);
 
 const unsigned mem_node[4] = {0, 1, 2, 3};
 const char *fpga_fn[] = {
@@ -81,8 +82,9 @@ static int lcore_integral(void *arg)
 {
 	task_s *params = arg;
 	char *vec;
-	void *dest;
+	void *dest, *vdest;
 	long i;
+	long nr, nc, beamid;
 //	float time_used;
 //	struct timeval start_t, end_t;
 
@@ -95,10 +97,15 @@ static int lcore_integral(void *arg)
 //		gettimeofday(&start_t, NULL);
 		vec = params->vec;
 		dest = params->dest;
+		vdest = params->vdest;
+		nr = params->nr;
+		nc = params->nc;
+		beamid = params->beamid;
 		for (i=0; i<params->repeat; i++) {
-			asmfunc(params->mat, vec, params->nr, params->nc, dest, params->mask);
+			asmfunc(params->mat, vec, nr, nc, dest, params->mask, beamid, vdest);
 			vec += DATA_SIZE * params->nr;
 			dest += 1024 * 16 * 2;
+			vdest += 1024;
 		}
 //		(*params->counter)++;
 		params->notify = true;
@@ -124,6 +131,7 @@ static int lcore_socket(void *arg)
 	int ring_head, ring_tail;
 	int fd;
 	char *buffer, *ptr;
+	int voltage_ready;
 
 	for (i=0; i<NR_FPGA*NR_BUFFER; i++) {
 		counter[i] = 0;
@@ -131,6 +139,7 @@ static int lcore_socket(void *arg)
 	}
 	ring_head = 0;
 	ring_tail = 0;
+	voltage_ready = 0;
 
 	// open the NFS ramdisk
 	fd = open(RAMDISK, O_RDWR);
@@ -166,6 +175,7 @@ static int lcore_socket(void *arg)
 				rings[ring_head].filled_p = &status_p->filled;
 				ring_head++;
 				if (ring_head >= NR_FPGA*NR_BUFFER) ring_head = 0;
+				if (status_p->beamid >= 0) voltage_ready++;
 			}
 		}
 
@@ -188,6 +198,16 @@ static int lcore_socket(void *arg)
 			*ring_p->filled_p = false;
 			ring_tail++;
 			if (ring_tail >= NR_FPGA*NR_BUFFER) ring_tail = 0;
+		}
+
+		while (voltage_ready > 0) {
+			if (v_head == v_tail)
+				printf("Voltage data buffer may be overwriting\n");
+			// write [vbuffer + v_tail * VOLTAGE_BLOCK];
+
+			v_tail++;
+			if (v_tail >= NR_BUFFER) v_tail = 0;
+			voltage_ready--;
 		}
 
 		usleep(1000);
@@ -233,6 +253,7 @@ int main(int argc, char **argv)
 	} mq_data;
 	int priority;
 	ssize_t len;
+	int beamid;
 
 	mqueue = mq_open("/burstt", O_RDONLY);
 	if (mqueue == (mqd_t) -1) {
@@ -287,6 +308,7 @@ int main(int argc, char **argv)
 			status_p->filled = false;
 			status_p->data_p = dest[i] + 2 * j * length;
 			status_p->length = length * 2;
+			status_p->beamid = -1;
 			status_p++;
 		}
 
@@ -312,6 +334,7 @@ int main(int argc, char **argv)
 				len, mq_data.fpga, mq_data.index, priority);
 		k = mq_data.fpga;
 		offset0 = mq_data.index * BLOCK_SIZE;
+		beamid = mq_data.beamid;
 		if (k < 0) {
 			printf("Quit the process.....\n");
 			break;
@@ -338,6 +361,8 @@ int main(int argc, char **argv)
 				params[i].nc = 1024 - j * NR_ch;
 			params[i].repeat = NR_run;
 			params[i].dest = dest[k] + (j * NR_ch * 16 + b_index[k] * length) * 2;
+			params[i].beamid = beamid;
+			params[i].vdest = vbuffer + v_head * VOLTAGE_BLOCK + j * NR_ch;
 			params[i].mask = mask[k] + (j * NR_ch / 512);
 			params[i].filled = true;
 			status_p->notify_p[j] = &params[i].notify;
@@ -345,6 +370,14 @@ int main(int argc, char **argv)
 			printf(" %d", lcores[i]);
 		}
 		printf("\n");
+
+		status_p->beamid = beamid;
+		if (beamid >= 0) {
+			v_head++;
+			if (v_head == v_tail)
+				printf("Disk writing for voltage data too slow\n");
+			if (v_head >= NR_BUFFER) v_head = 0;
+		}
 
 		status_p->filled = true;
 		b_index[k]++;
