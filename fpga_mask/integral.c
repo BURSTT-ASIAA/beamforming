@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <time.h>
 
 #include <rte_memory.h>
 #include <rte_launch.h>
@@ -35,8 +36,10 @@
 #define BLOCK_SIZE DATA_SIZE * NR_sum * NR_run
 #define MASK_OFFSET (8192 + 64) *  4000000L
 #define RAMDISK "/bonsai/beams.bin"
-#define RAMDISK_SIZE 1024*16*2*4000*60L
+#define RAMDISK_SIZE 1024*16*2*1000*60L
 #define VOLTAGE_BLOCK NR_sum * NR_run * NR_cpu * NR_ch
+#define VOLTAGE_PREFIX "/disk1/voltage/T"
+#define VOLTAGE_PER_FILE 60
 
 typedef struct __attribute__ ((aligned (64))) {
 	short *mat;
@@ -76,6 +79,12 @@ const char *fpga_fn[] = {
 volatile int quit_signal = false;
 void *vbuffer;
 volatile int v_head=0, v_tail=0;
+
+/* generate a filename from current time */
+void voltage_name(char *cbuf)
+{
+	sprintf(cbuf, VOLTAGE_PREFIX"%010ld", time(NULL));
+}
 
 /* Launch a function on lcore. 8< */
 static int lcore_integral(void *arg)
@@ -129,9 +138,11 @@ static int lcore_socket(void *arg)
 	char *data_p;
 	ring_s rings[NR_FPGA*NR_BUFFER], *ring_p;
 	int ring_head, ring_tail;
-	int fd;
-	char *buffer, *ptr;
-	int voltage_ready;
+	int fd, vfd;
+	char *buffer, *ptr, vname[80];
+	int voltage_ready, voltage_count;
+	ssize_t left, transfered;
+	bool voltage_output = true;
 
 	for (i=0; i<NR_FPGA*NR_BUFFER; i++) {
 		counter[i] = 0;
@@ -139,7 +150,6 @@ static int lcore_socket(void *arg)
 	}
 	ring_head = 0;
 	ring_tail = 0;
-	voltage_ready = 0;
 
 	// open the NFS ramdisk
 	fd = open(RAMDISK, O_RDWR);
@@ -148,6 +158,12 @@ static int lcore_socket(void *arg)
 	if(buffer == MAP_FAILED){
 		printf("Mapping ramdisk failed\n");
 	}
+
+	// open the voltage data file
+	voltage_name(vname);
+	vfd = open(vname, O_CREAT|O_WRONLY|O_TRUNC, 0644);
+	voltage_ready = 0;
+	voltage_count = 0;
 
 	while (!quit_signal) {
 		status_p = arg;
@@ -203,11 +219,35 @@ static int lcore_socket(void *arg)
 		while (voltage_ready > 0) {
 			if (v_head == v_tail)
 				printf("Voltage data buffer may be overwriting\n");
-			// write [vbuffer + v_tail * VOLTAGE_BLOCK];
 
+			if (voltage_output) {
+				left = VOLTAGE_BLOCK;
+				data_p = vbuffer + v_tail * VOLTAGE_BLOCK;
+				while (left > 0) {
+					transfered = write(vfd, data_p, left);
+					if (transfered < 0) {
+						printf("Disk writing for voltage data failed\n");
+						printf("Halt the voltage output\n");
+						voltage_output = false;
+						break;
+					} else {
+						data_p += transfered;
+						left -= transfered;
+					}
+				}
+
+				if (voltage_output) voltage_count++;
+				if (voltage_count >= VOLTAGE_PER_FILE) {
+					close(vfd);
+					voltage_name(vname);
+					vfd = open(vname, O_CREAT|O_WRONLY|O_TRUNC, 0644);
+					voltage_count = 0;
+				}
+			}
+
+			voltage_ready--;
 			v_tail++;
 			if (v_tail >= NR_BUFFER) v_tail = 0;
-			voltage_ready--;
 		}
 
 		usleep(1000);
