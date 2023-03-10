@@ -30,13 +30,13 @@
 #define NR_ch 128UL // must be multiple of 16
 #define NR_cpu 8 // 1024 / NR_ch
 #define NR_FPGA 4
-#define DATA_SIZE (8192 + 64) * 2
+#define DATA_SIZE (8192 + 64) * 2L
 #define DATA_HEADER 64
 #define NR_BUFFER 4
 #define BLOCK_SIZE DATA_SIZE * NR_sum * NR_run
-#define MASK_OFFSET (8192 + 64) *  4000000L
+#define MASK_OFFSET BLOCK_SIZE * 16L
 #define RAMDISK "/bonsai/beams.bin"
-#define RAMDISK_SIZE 1024*16*2*1000*60L
+#define RAMDISK_SIZE 1024*16*4*1000*60L
 #define VOLTAGE_BLOCK NR_sum * NR_run * NR_cpu * NR_ch
 #define VOLTAGE_PREFIX "/disk1/voltage/T"
 #define VOLTAGE_PER_FILE 60

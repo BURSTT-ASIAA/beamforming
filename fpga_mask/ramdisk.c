@@ -7,20 +7,16 @@
 
 #define RAMDISK "/bonsai/beams.bin"
 //#define RAMDISK "beams.bin"
-#define RAMDISK_LENGTH 1024*16*2*4000*60L
-#define BLOCK_LENGTH 1024*16*2
-
-void f32tof16(void *, void *);
-void f32tob16(void *, void *);
-void b16tof32(void *, void *);
+#define RAMDISK_LENGTH 1024*16*4*1000*60L
+#define BLOCK_LENGTH 1024*16*4
 
 int main(int argc, char **argv)
 {
 	int fd ,ret;
-	char *buffer, *ptr;
+	void *buffer, *ptr;
 	int j, k;
 	float __attribute__ ((aligned (64))) input[1024][16];
-	char __attribute__ ((aligned (64))) output[BLOCK_LENGTH];
+	float *fptr;
 
 	fd = open(RAMDISK, O_RDWR);
 	buffer = mmap(NULL, RAMDISK_LENGTH, PROT_WRITE, MAP_SHARED, fd, 0);
@@ -35,24 +31,17 @@ int main(int argc, char **argv)
 			input[j][k] = j + k;
 		}
 	}
-	ptr = (char *)&input[0][0];
-	printf("Input value: %hhu %hhu %hhu %hhu", ptr[0], ptr[1], ptr[2], ptr[3]);
-	printf(" %hhu %hhu %hhu %hhu\n", ptr[4], ptr[5], ptr[6], ptr[7]);
+	fptr = input[0];
+	printf("Input value: %f %f %f %f\n", fptr[0], fptr[1], fptr[2], fptr[3]);
 
-	f32tob16(output, input);
 	ptr = buffer;
 	for (j=0; j<4; j++) {
-		memcpy(ptr, output, BLOCK_LENGTH);
+		memcpy(ptr, input, BLOCK_LENGTH);
 		msync(ptr, BLOCK_LENGTH, MS_SYNC);
 		ptr += BLOCK_LENGTH;
 	}
-	printf("Output value: %hhu %hhu %hhu %hhu\n", buffer[0], buffer[1], buffer[2], buffer[3]);
-
-	b16tof32(input, output);
-	printf("Convert value: %.2f %.2f %.2f %.2f\n", input[0][0], input[0][1], input[0][2], input[0][3]);
-	ptr = (char *)&input[0][0];
-	printf("Convert value: %hhu %hhu %hhu %hhu", ptr[0], ptr[1], ptr[2], ptr[3]);
-	printf(" %hhu %hhu %hhu %hhu\n", ptr[4], ptr[5], ptr[6], ptr[7]);
+	fptr = buffer;
+	printf("Output value: %f %f %f %f\n", fptr[0], fptr[1], fptr[2], fptr[3]);
 
 	munmap(buffer, RAMDISK_LENGTH);
 }
