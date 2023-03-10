@@ -113,7 +113,7 @@ static int lcore_integral(void *arg)
 		for (i=0; i<params->repeat; i++) {
 			asmfunc(params->mat, vec, nr, nc, dest, params->mask, beamid, vdest);
 			vec += DATA_SIZE * params->nr;
-			dest += 1024 * 16 * 2;
+			dest += 1024 * 16 * 4;
 			vdest += 1024;
 		}
 //		(*params->counter)++;
@@ -321,7 +321,7 @@ int main(int argc, char **argv)
 			rte_exit(EXIT_FAILURE, "Cannot mmap data buffer\n");
 		mask[i] = vec[i] + MASK_OFFSET;
 
-		dest[i] = rte_malloc_socket(NULL, 2 * length * NR_BUFFER, 0x40, mem_node[i]);
+		dest[i] = rte_malloc_socket(NULL, 4 * length * NR_BUFFER, 0x40, mem_node[i]);
 		if (dest[i] == NULL)
 			rte_exit(EXIT_FAILURE, "Cannot init integral buffer\n");
 		b_index[i] = 0;
@@ -346,7 +346,7 @@ int main(int argc, char **argv)
 	for (i=0; i<NR_FPGA; i++)
 		for (j=0; j<NR_BUFFER; j++) {
 			status_p->filled = false;
-			status_p->data_p = dest[i] + 2 * j * length;
+			status_p->data_p = dest[i] + 4 * j * length;
 			status_p->length = length * 2;
 			status_p->beamid = -1;
 			status_p++;
@@ -400,7 +400,7 @@ int main(int argc, char **argv)
 			else
 				params[i].nc = 1024 - j * NR_ch;
 			params[i].repeat = NR_run;
-			params[i].dest = dest[k] + (j * NR_ch * 16 + b_index[k] * length) * 2;
+			params[i].dest = dest[k] + (j * NR_ch * 16 + b_index[k] * length) * 4;
 			params[i].beamid = beamid;
 			params[i].vdest = vbuffer + v_head * VOLTAGE_BLOCK + j * NR_ch;
 			params[i].mask = mask[k] + (j * NR_ch / 512);
