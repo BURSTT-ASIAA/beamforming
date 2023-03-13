@@ -15,6 +15,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <time.h>
+#include <math.h>
 
 #include <rte_memory.h>
 #include <rte_launch.h>
@@ -294,6 +295,7 @@ int main(int argc, char **argv)
 	int priority;
 	ssize_t len;
 	int beamid;
+	float phase;
 
 	mqueue = mq_open("/burstt", O_RDONLY);
 	if (mqueue == (mqd_t) -1) {
@@ -337,8 +339,18 @@ int main(int argc, char **argv)
 			for (i=0; i<16; i++) {
 				// p: real, p2:imag
 				p = ((k * 16 + j) * 16 + i) * 2;
-				mat[p] = 0;
-				mat[p + 1] = 0;
+/*
+				if (i == j) {
+					mat[p] = 4096;
+					mat[p + 1] = 0;
+				} else {
+					mat[p] = 0;
+					mat[p + 1] = 0;
+				}
+*/
+				phase = M_PI * 2 / 16 * i * j;
+				mat[p] = 256 * cosf(phase);
+				mat[p + 1] = -256 * sinf(phase);
 			}
 
 	// init status_s
@@ -370,8 +382,8 @@ int main(int argc, char **argv)
 
 	while(true) {
 		len = mq_receive(mqueue, (void *)&mq_data, sizeof(mq_data), &priority);
-		printf("Data in-> length:%d, fpga#%d, index:%d, priority:%d\n",
-				len, mq_data.fpga, mq_data.index, priority);
+		printf("Data in-> length:%d, fpga#%d, index:%d, beamid:%d, priority:%d\n",
+				len, mq_data.fpga, mq_data.index, mq_data.beamid, priority);
 		k = mq_data.fpga;
 		offset0 = mq_data.index * BLOCK_SIZE;
 		beamid = mq_data.beamid;
