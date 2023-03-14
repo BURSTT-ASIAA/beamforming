@@ -14,7 +14,8 @@ int main(int argc, char **argv)
 	struct {
 		int fpga;
 		int index;
-		char padding[8];
+		int beamid;
+		char padding[4];
 	} data;
 	int priority, i;
 	ssize_t len;
@@ -30,22 +31,25 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	for (i=0; i<256; i++) {
+	for (i=0; i<64; i++) {
 		data.fpga = i%4;
 		data.index = 0;
+		data.beamid = -1;
 		mq_send(mqueue, (void *)&data, sizeof(data), 0);
 	}
 	data.fpga = -1;
 	data.index = 0;
+	data.beamid = -1;
 	mq_send(mqueue, (void *)&data, sizeof(data), 0);
 
 	mq_getattr(mqueue, &attr);
 	printf("%lx, %ld, %ld, %ld\n", attr.mq_flags, attr.mq_maxmsg, attr.mq_msgsize, attr.mq_curmsgs);
 
-//	for (i=0; i<attr.mq_curmsgs; i++) {
-//		len = mq_receive(mqueue, (void *)&data, sizeof(data), &priority);
-//		printf("length:%d, fpga#%d, index:%d, priority:%d\n", len, data.fpga, data.index, priority);
-//	}
+	for (i=0; i<attr.mq_curmsgs; i++) {
+		len = mq_receive(mqueue, (void *)&data, sizeof(data), &priority);
+		printf("[%d] length:%d, fpga#%d, index:%d, beamid:%d, priority:%d\n",
+				i, len, data.fpga, data.index, data.beamid, priority);
+	}
 
 	mq_close(mqueue);
 }

@@ -39,7 +39,7 @@
 #define RAMDISK "/bonsai/beams.bin"
 #define RAMDISK_SIZE 1024*16*4*1000*60L
 #define VOLTAGE_BLOCK NR_sum * NR_run * NR_cpu * NR_ch
-#define VOLTAGE_PREFIX "/disk1/voltage/T"
+#define VOLTAGE_PREFIX "/sdisk1/VoltageData/T"
 #define VOLTAGE_PER_FILE 60
 
 typedef struct __attribute__ ((aligned (64))) {
@@ -254,6 +254,7 @@ static int lcore_socket(void *arg)
 		usleep(1000);
 	}
 
+	close(vfd);
 	munmap(buffer, RAMDISK_SIZE);
 }
 
