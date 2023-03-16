@@ -65,3 +65,9 @@ ramdisk: ramdisk.c build/fp16.o
 
 build/fp16.o: fp16.asm
 	nasm -f elf64 -o $@ fp16.asm
+
+intensity: intensity.c
+	$(CC) -o $@ intensity.c
+
+voltage: voltage.c
+	$(CC) -o $@ voltage.c
