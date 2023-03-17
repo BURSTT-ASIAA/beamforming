@@ -36,6 +36,7 @@
 #define NR_BUFFER 4
 #define BLOCK_SIZE DATA_SIZE * NR_sum * NR_run
 #define MASK_OFFSET BLOCK_SIZE * 8L
+#define MASK_BLOCK_SIZE ((NR_sum * NR_run) >> 2)
 #define RAMDISK "/dev/hugepages/beams.bin"
 #define RAMDISK_DATA_SIZE 1024*16*4*1000*60L
 #define RAMDISK_INFO_SIZE 64L
@@ -412,7 +413,7 @@ int main(int argc, char **argv)
             params[i].dest = dest[k] + (j * NR_ch * 16 + b_index[k] * length) * 4;
             params[i].beamid = beamid;
             params[i].vdest = vbuffer + v_head * VOLTAGE_BLOCK + j * NR_ch;
-            params[i].mask = mask[k] + (j * NR_ch / 512);
+            params[i].mask = mask[k] + mq_data.index * MASK_BLOCK_SIZE + (j * NR_ch / 512);
             params[i].filled = true;
             status_p->notify_p[j] = &params[i].notify;
 
