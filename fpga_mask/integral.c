@@ -29,23 +29,23 @@
 #define NR_sum 400UL  // integral count
 #define NR_run 1000UL // NR_pack / NR_sum
 #define NR_ch 128UL // must be multiple of 16
-#define NR_cpu 8 // 1024 / NR_ch
-#define NR_FPGA 4
+#define NR_cpu 8L // 1024 / NR_ch
+#define NR_FPGA 1L
 #define DATA_SIZE (8192 + 64) * 2L
-#define DATA_HEADER 64
-#define NR_BUFFER 4
+#define DATA_HEADER 64L
+#define NR_BUFFER 16L
+#define NR_VBUFFER 5L
 #define BLOCK_SIZE DATA_SIZE * NR_sum * NR_run
 #define MASK_OFFSET BLOCK_SIZE * 8L
 #define MASK_BLOCK_SIZE ((NR_sum * NR_run) >> 2)
-#define RAMDISK "/dev/hugepages/beams.bin"
-#define RAMDISK_DATA_SIZE 1024*16*4*1000*60L
-#define RAMDISK_INFO_SIZE 64L
-#define RAMDISK_SIZE RAMDISK_DATA_SIZE + RAMDISK_INFO_SIZE
+#define INTENSITY_DATA_SIZE NR_run * NR_BUFFER * 1024 * 16 * 4L
+#define INTENSITY_INFO_SIZE 64L
+#define INTENSITY_SIZE INTENSITY_DATA_SIZE + INTENSITY_INFO_SIZE
 #define VOLTAGE_BLOCK NR_sum * NR_run * NR_cpu * NR_ch
 #define VOLTAGE_FILE "/dev/hugepages/voltage.bin"
-#define VOLTAGE_DATA_SIZE VOLTAGE_BLOCK * 5L
+#define VOLTAGE_DATA_SIZE VOLTAGE_BLOCK * NR_VBUFFER
 #define VOLTAGE_INFO_SIZE 64L
-#define VOLTAGE_FILE_SIZE VOLTAGE_DATA_SIZE + VOLTAGE_INFO_SIZE
+#define VOLTAGE_SIZE VOLTAGE_DATA_SIZE + VOLTAGE_INFO_SIZE
 
 typedef struct __attribute__ ((aligned (64))) {
     short *mat;
@@ -57,34 +57,34 @@ typedef struct __attribute__ ((aligned (64))) {
     void *dest;
     void *vdest;
     char *mask;
-    bool filled;
-    bool notify;
+    int cpu_id;
+    int buffer_id;
 } task_s;
-typedef struct __attribute__ ((aligned (64))) {
-    bool *notify_p[NR_cpu];
-    void *data_p;
-    long length;
-    int beamid;
-    bool filled;
-} status_s;
-typedef struct {
-    void *data_p;
-    long length;
-    bool *filled_p;
-} ring_s;
 
 int asmfunc(short *mat, char *vec, long nr, long nc, void *dest, char *mask, long beamid, void *voltage);
 
-const unsigned mem_node[4] = {0, 0, 1, 1};
+//const unsigned mem_node[4] = {0, 1, 0, 1};
 const char *fpga_fn[] = {
     "/mnt/fpga0",
     "/mnt/fpga1",
     "/mnt/fpga2",
     "/mnt/fpga3"
 };
+const char *intensity_fn[] = {
+    "/dev/hugepages/fpga0.bin",
+    "/dev/hugepages/fpga1.bin",
+    "/dev/hugepages/fpga2.bin",
+    "/dev/hugepages/fpga3.bin",
+};
+
 volatile int quit_signal = false;
-void *vbuffer;
-volatile int v_head=0, v_tail=0;
+bool cpu_busy[RTE_MAX_LCORE];
+int buffer_counter[NR_FPGA * NR_BUFFER];
+bool buffer_beam[NR_FPGA * NR_BUFFER];
+void *buffer[NR_FPGA], *vbuffer;
+long *ip_ptr[NR_FPGA], *vp_ptr;
+volatile int v_head=0, v_processed=0;
+volatile int i_head[NR_FPGA], i_processed[NR_FPGA];
 
 /* Launch a function on lcore. 8< */
 static int lcore_integral(void *arg)
@@ -98,7 +98,7 @@ static int lcore_integral(void *arg)
 //	struct timeval start_t, end_t;
 
     while (!quit_signal) {
-        if (!params->filled) {
+        if (!cpu_busy[params->cpu_id]) {
             usleep(1000);
             continue;
         }
@@ -116,9 +116,8 @@ static int lcore_integral(void *arg)
             dest += 1024 * 16 * 4;
             vdest += 1024;
         }
-//		(*params->counter)++;
-        params->notify = true;
-        params->filled = false;
+        cpu_busy[params->cpu_id] = false;
+        buffer_counter[params->buffer_id]++;
 //		gettimeofday(&end_t, NULL);
 //		time_used = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_usec - start_t.tv_usec) / 1000000.;
 //		printf("lcores #%d,  Real time: %3f\n", rte_lcore_id(), time_used);
@@ -130,128 +129,24 @@ static int lcore_integral(void *arg)
 
 static int lcore_socket(void *arg)
 {
-    status_s *status_p;
-    int counter[NR_FPGA*NR_BUFFER];
-    int mask_arr[NR_FPGA*NR_BUFFER], mask;
-    int i, j;
-    long len, offset = 0, vfilled = 0;
-    char *data_p;
-    ring_s rings[NR_FPGA*NR_BUFFER], *ring_p;
-    int ring_head, ring_tail;
-    int fd;
-    long *intensity_head, *voltage_head;
-    char *buffer, *_vbuffer, *ptr;
-    int voltage_ready = 0;
-
-    for (i=0; i<NR_FPGA*NR_BUFFER; i++) {
-        counter[i] = 0;
-        mask_arr[i] = 0;
-    }
-    ring_head = 0;
-    ring_tail = 0;
-
-    // open the NFS ramdisk
-    fd = open(RAMDISK, O_RDWR);
-    if(fd < 0){
-        printf("Open ramdisk failed\n");
-    }
-    buffer = mmap(NULL, RAMDISK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if(buffer == MAP_FAILED){
-        printf("Mapping ramdisk failed\n");
-    } else {
-        intensity_head = (long *)(buffer + RAMDISK_DATA_SIZE);
-    }
-    close(fd);
-
-    // open the voltage data buffer
-    fd = open(VOLTAGE_FILE, O_RDWR);
-    if(fd < 0){
-        printf("Open voltage buffer failed\n");
-    }
-    _vbuffer = mmap(NULL, VOLTAGE_FILE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if(_vbuffer == MAP_FAILED){
-        printf("Mapping voltage buffer failed\n");
-    } else {
-        voltage_head = (long *)(_vbuffer + VOLTAGE_DATA_SIZE);
-    }
-    close(fd);
+    int i, p;
 
     while (!quit_signal) {
-        status_p = arg;
-        for (i=0; i<NR_FPGA*NR_BUFFER; i++, status_p++) {
-            if (!status_p->filled) continue;
+        for (i = 0; i < NR_FPGA; i++) {
+            p = i * NR_BUFFER + i_processed[i];
+            if (buffer_counter[p] >= NR_cpu) {
+                *ip_ptr[i] = ++i_processed[i];
+                if (i_processed[i] == NR_BUFFER) i_processed[i] = 0;
+                buffer_counter[p] = -1;
 
-//			printf("get notify fpga%d[%d], pointer:%p\n",
-//					i/NR_BUFFER, i%NR_BUFFER, status_p);
-            mask = 1;
-            for (j=0; j<NR_cpu; j++, mask<<=1) {
-                if (mask_arr[i] & mask) continue;
-
-                if (*status_p->notify_p[j]) {
-                    mask_arr[i] |= mask;
-                    *status_p->notify_p[j] = false;
-                    counter[i]++;
+                if (buffer_beam[p]) {
+                    *vp_ptr = ++v_processed;
+                    if (v_processed == NR_VBUFFER) v_processed = 0;
                 }
             }
-
-            if (counter[i] >= NR_cpu) {
-                mask_arr[i] = 0;
-                counter[i] = 0;
-                rings[ring_head].data_p = status_p->data_p;
-                rings[ring_head].length = status_p->length;
-                rings[ring_head].filled_p = &status_p->filled;
-                ring_head++;
-                if (ring_head >= NR_FPGA*NR_BUFFER) ring_head = 0;
-                if (status_p->beamid >= 0) voltage_ready++;
-            }
         }
-
-        while (ring_head != ring_tail) {
-            ring_p = &rings[ring_tail];
-//			printf("Buffer(%p) filled, sending packets(%lx)...\n", ring_p->data_p, ring_p->length);
-
-            if(buffer != MAP_FAILED){
-                len = ring_p->length;
-                data_p = ring_p->data_p;
-                ptr = buffer + offset;
-                memcpy(ptr, data_p, len);
-
-                offset += len;
-                if (offset + len > RAMDISK_DATA_SIZE) {
-                    offset = 0;
-                }
-                *intensity_head = offset;
-                msync(ptr, len, MS_SYNC);
-            }
-
-            *ring_p->filled_p = false;
-            ring_tail++;
-            if (ring_tail >= NR_FPGA*NR_BUFFER) ring_tail = 0;
-        }
-
-        while (voltage_ready > 0) {
-            if (_vbuffer != MAP_FAILED) {
-                data_p = vbuffer + v_tail * VOLTAGE_BLOCK;
-                ptr = _vbuffer + vfilled;
-                memcpy(ptr, data_p, VOLTAGE_BLOCK);
-
-                vfilled += VOLTAGE_BLOCK;
-                if (vfilled + VOLTAGE_BLOCK > VOLTAGE_DATA_SIZE)
-                    vfilled = 0;
-                *voltage_head = vfilled;
-                msync(ptr, VOLTAGE_BLOCK, MS_SYNC);
-            }
-
-            voltage_ready--;
-            v_tail++;
-            if (v_tail >= NR_BUFFER) v_tail = 0;
-        }
-
         usleep(1000);
     }
-
-    munmap(buffer, RAMDISK_SIZE);
-    munmap(_vbuffer, VOLTAGE_FILE_SIZE);
 }
 
 /* find a feee lcore or wait */
@@ -261,7 +156,7 @@ static int find_lcore(task_s *tasks, int ncores)
 
     while (true) {
         for (i=0; i<ncores; i++)
-            if (!tasks[i].filled && !tasks[i].notify) return i;
+            if (!cpu_busy[i]) return i;
         usleep(1000);
     }
 }
@@ -273,15 +168,11 @@ int main(int argc, char **argv)
     unsigned lcore_id, socket_id;
     char *vec[NR_FPGA], *mask[NR_FPGA];
     short mat[16*16*2*1024];
-    void *dest[NR_FPGA];
     int i, j, k, p, ncores;
     task_s params[RTE_MAX_LCORE];
     struct stat sb[NR_FPGA];
     unsigned lcores[RTE_MAX_LCORE];
     long offset, offset0, length;
-    int b_index[NR_FPGA];
-    status_s status[NR_FPGA*NR_BUFFER];
-    status_s *status_p;
     mqd_t mqueue;
     struct {
         int fpga;
@@ -306,7 +197,7 @@ int main(int argc, char **argv)
 
     /* Retrieve the data buffer */
     length = NR_run * NR_cpu * NR_ch * 16;
-    for (i=0; i<NR_FPGA; i++) {
+    for (i = 0; i < NR_FPGA; i++) {
         fd = open(fpga_fn[i], O_RDONLY);
         if (fd < 0)
             rte_exit(EXIT_FAILURE, "Cannot open fpga file: %s\n", fpga_fn[i]);
@@ -320,15 +211,36 @@ int main(int argc, char **argv)
             rte_exit(EXIT_FAILURE, "Cannot mmap data buffer\n");
         mask[i] = vec[i] + MASK_OFFSET;
 
-        dest[i] = rte_malloc_socket(NULL, 4 * length * NR_BUFFER, 0x40, mem_node[i]);
-        if (dest[i] == NULL)
-            rte_exit(EXIT_FAILURE, "Cannot init integral buffer\n");
-        b_index[i] = 0;
+        fd = open(intensity_fn[i], O_RDWR);
+        if (fd < 0)
+            rte_exit(EXIT_FAILURE, "Cannot open intensity file: %s\n", intensity_fn[i]);
+
+        buffer[i] = mmap(NULL, INTENSITY_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        close(fd);
+        if (buffer[i] == MAP_FAILED)
+            rte_exit(EXIT_FAILURE, "Cannot mmap intensity buffer\n");
+        ip_ptr[i] = (long *)(buffer[i] + INTENSITY_DATA_SIZE);
+
+        i_head[i] = 0;
+        i_processed[i] = 0;
+        *ip_ptr[i] = 0;
     }
 
-    vbuffer = rte_malloc(NULL, VOLTAGE_BLOCK * NR_BUFFER, 0x40);
-    if (vbuffer == NULL)
-        rte_exit(EXIT_FAILURE, "Cannot init voltage buffer\n");
+    fd = open(VOLTAGE_FILE, O_RDWR);
+    if(fd < 0)
+        rte_exit(EXIT_FAILURE, "Open voltage buffer failed\n");
+
+    vbuffer = mmap(NULL, VOLTAGE_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    close(fd);
+    if(vbuffer == MAP_FAILED)
+        rte_exit(EXIT_FAILURE, "Mapping voltage buffer failed\n");
+    vp_ptr = (long *)(vbuffer + VOLTAGE_DATA_SIZE);
+    *vp_ptr = 0;
+
+    for (i = 0; i < NR_FPGA * NR_BUFFER; i++) {
+        buffer_counter[i] = -1;
+        buffer_beam[i] = false;
+    }
 
     // transposed matrix
     for (k=0; k<1024; k++)
@@ -351,26 +263,16 @@ int main(int argc, char **argv)
 */
             }
 
-    // init status_s
-    status_p = status;
-    for (i=0; i<NR_FPGA; i++)
-        for (j=0; j<NR_BUFFER; j++) {
-            status_p->filled = false;
-            status_p->data_p = dest[i] + 4 * j * length;
-            status_p->length = length * 2;
-            status_p->beamid = -1;
-            status_p++;
-        }
-
     /* Launches the socket+integral functions on lcores. 8< */
     i = -1;
     RTE_LCORE_FOREACH_WORKER(lcore_id) {
         if (i < 0) {
             // socket function
-            rte_eal_remote_launch(lcore_socket, status, lcore_id);
+            rte_eal_remote_launch(lcore_socket, NULL, lcore_id);
         } else {
             // integral funtion
-            params[i].filled = false;
+            cpu_busy[i] = false;
+            params[i].cpu_id = i;
             rte_eal_remote_launch(lcore_integral, &params[i], lcore_id);
             lcores[i] = lcore_id;
         }
@@ -380,6 +282,11 @@ int main(int argc, char **argv)
 
     while(true) {
         len = mq_receive(mqueue, (void *)&mq_data, sizeof(mq_data), &priority);
+//        if (len < 0) {
+//            usleep(1000);
+//            continue;
+//        }
+
         printf("Data in-> length:%d, fpga#%d, index:%d, beamid:%d, priority:%d\n",
                 len, mq_data.fpga, mq_data.index, mq_data.beamid, priority);
         k = mq_data.fpga;
@@ -390,10 +297,12 @@ int main(int argc, char **argv)
             break;
         }
 
-        status_p = status + k * NR_BUFFER + b_index[k];
-        if (status_p->filled) {
-            printf("output buffer is not empty: fpga%d[%d]\n", k, b_index[k]);
+        p = k * NR_BUFFER + i_head[k];
+        if (buffer_counter[p] >= 0) {
+            printf("Intensity buffer is not empty: fpga%d[%d]\n", k, i_head[k]);
         }
+        if (beamid > 0 && v_head == v_processed)
+            printf("Voltage data writing too slow\n");
 
         printf("Processing fpga#%d  cpus:", k);
         for (j=0; j<NR_cpu; j++) {
@@ -410,46 +319,41 @@ int main(int argc, char **argv)
             else
                 params[i].nc = 1024 - j * NR_ch;
             params[i].repeat = NR_run;
-            params[i].dest = dest[k] + (j * NR_ch * 16 + b_index[k] * length) * 4;
+            params[i].dest = buffer[k] + (j * NR_ch * 16 + i_head[k] * length) * 4;
             params[i].beamid = beamid;
             params[i].vdest = vbuffer + v_head * VOLTAGE_BLOCK + j * NR_ch;
             params[i].mask = mask[k] + mq_data.index * MASK_BLOCK_SIZE + (j * NR_ch / 512);
-            params[i].filled = true;
-            status_p->notify_p[j] = &params[i].notify;
+            params[i].buffer_id = p;
 
+            cpu_busy[i] = true;
             printf(" %d", lcores[i]);
         }
         printf("\n");
 
-        status_p->beamid = beamid;
-        if (beamid >= 0) {
-            v_head++;
-            if (v_head == v_tail)
-                printf("Disk writing for voltage data too slow\n");
-            if (v_head >= NR_BUFFER) v_head = 0;
-        }
+        i_head[k]++;
+        if (i_head[k] >= NR_BUFFER) i_head[k] = 0;
+        buffer_counter[p] = 0;
 
-        status_p->filled = true;
-        b_index[k]++;
-        if (b_index[k] >= NR_BUFFER) b_index[k] = 0;
+        if (beamid >= 0) {
+            buffer_beam[p] = true;
+            v_head++;
+            if (v_head >= NR_VBUFFER) v_head = 0;
+        } else {
+            buffer_beam[p] = false;
+        }
     }
 
     // quit
     for (i=0; i<ncores; i++)
-        while (params[i].filled) usleep(1000);
-    status_p = status;
-    for (i=0; i<NR_FPGA*NR_BUFFER; i++) {
-        while (status_p->filled) usleep(1000);
-        status_p++;
-    }
+        while (cpu_busy[i]) usleep(1000);
     quit_signal = true;
 
     /* clean up the EAL */
     for (i=0; i<NR_FPGA; i++) {
         munmap(vec[i], sb[i].st_size);
-        rte_free(dest[i]);
+        munmap(buffer[i], INTENSITY_SIZE);
     }
-    rte_free(vbuffer);
+    munmap(vbuffer, VOLTAGE_SIZE);
     rte_eal_cleanup();
 
     mq_close(mqueue);
