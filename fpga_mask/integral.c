@@ -30,13 +30,13 @@
 #define NR_run 1000UL // NR_pack / NR_sum
 #define NR_ch 128UL // must be multiple of 16
 #define NR_cpu 8L // 1024 / NR_ch
-#define NR_FPGA 1L
+#define NR_FPGA 4L
 #define DATA_SIZE (8192 + 64) * 2L
 #define DATA_HEADER 64L
 #define NR_BUFFER 16L
 #define NR_VBUFFER 5L
 #define BLOCK_SIZE DATA_SIZE * NR_sum * NR_run
-#define MASK_OFFSET BLOCK_SIZE * 8L
+#define MASK_OFFSET BLOCK_SIZE * 30L
 #define MASK_BLOCK_SIZE ((NR_sum * NR_run) >> 2)
 #define INTENSITY_DATA_SIZE NR_run * NR_BUFFER * 1024 * 16 * 4L
 #define INTENSITY_INFO_SIZE 64L
@@ -65,10 +65,10 @@ int asmfunc(short *mat, char *vec, long nr, long nc, void *dest, char *mask, lon
 
 //const unsigned mem_node[4] = {0, 1, 0, 1};
 const char *fpga_fn[] = {
-    "/mnt/fpga0",
-    "/mnt/fpga1",
     "/mnt/fpga2",
-    "/mnt/fpga3"
+    "/mnt/fpga2",
+    "/mnt/fpga2",
+    "/mnt/fpga2"
 };
 const char *intensity_fn[] = {
     "/dev/hugepages/fpga0.bin",
@@ -77,14 +77,14 @@ const char *intensity_fn[] = {
     "/dev/hugepages/fpga3.bin",
 };
 
-volatile int quit_signal = false;
-bool cpu_busy[RTE_MAX_LCORE];
-int buffer_counter[NR_FPGA * NR_BUFFER];
-bool buffer_beam[NR_FPGA * NR_BUFFER];
+_Atomic bool quit_signal = false;
+_Atomic bool cpu_busy[RTE_MAX_LCORE];
+_Atomic int buffer_counter[NR_FPGA * NR_BUFFER];
+_Atomic bool buffer_beam[NR_FPGA * NR_BUFFER];
 void *buffer[NR_FPGA], *vbuffer;
 long *ip_ptr[NR_FPGA], *vp_ptr;
-volatile int v_head=0, v_processed=0;
-volatile int i_head[NR_FPGA], i_processed[NR_FPGA];
+_Atomic int v_head=0, v_processed=0;
+_Atomic int i_head[NR_FPGA], i_processed[NR_FPGA];
 
 /* Launch a function on lcore. 8< */
 static int lcore_integral(void *arg)
@@ -94,8 +94,8 @@ static int lcore_integral(void *arg)
     void *dest, *vdest;
     long i;
     long nr, nc, beamid;
-//	float time_used;
-//	struct timeval start_t, end_t;
+	float time_used;
+	struct timeval start_t, end_t;
 
     while (!quit_signal) {
         if (!cpu_busy[params->cpu_id]) {
@@ -103,7 +103,8 @@ static int lcore_integral(void *arg)
             continue;
         }
 
-//		gettimeofday(&start_t, NULL);
+		gettimeofday(&start_t, NULL);
+//        printf("Enter integral function: CPU#%d\n", params->cpu_id);
         vec = params->vec;
         dest = params->dest;
         vdest = params->vdest;
@@ -118,9 +119,10 @@ static int lcore_integral(void *arg)
         }
         cpu_busy[params->cpu_id] = false;
         buffer_counter[params->buffer_id]++;
-//		gettimeofday(&end_t, NULL);
-//		time_used = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_usec - start_t.tv_usec) / 1000000.;
+		gettimeofday(&end_t, NULL);
+		time_used = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_usec - start_t.tv_usec) / 1000000.;
 //		printf("lcores #%d,  Real time: %3f\n", rte_lcore_id(), time_used);
+        printf("Exit integral function: CPU#%d  Real time: %3f  counter:%d\n", params->cpu_id, time_used, buffer_counter[params->buffer_id]);
     }
 
     return 0;
@@ -138,6 +140,7 @@ static int lcore_socket(void *arg)
                 *ip_ptr[i] = ++i_processed[i];
                 if (i_processed[i] == NR_BUFFER) i_processed[i] = 0;
                 buffer_counter[p] = -1;
+                printf("=== Processed: fpga#%d  head:%d  processed:%d ===\n", i, i_head[i], i_processed[i]);
 
                 if (buffer_beam[p]) {
                     *vp_ptr = ++v_processed;
@@ -296,6 +299,8 @@ int main(int argc, char **argv)
             printf("Quit the process.....\n");
             break;
         }
+        if (k >= NR_FPGA)
+            continue;
 
         p = k * NR_BUFFER + i_head[k];
         if (buffer_counter[p] >= 0) {
@@ -304,7 +309,8 @@ int main(int argc, char **argv)
         if (beamid > 0 && v_head == v_processed)
             printf("Voltage data writing too slow\n");
 
-        printf("Processing fpga#%d  cpus:", k);
+        printf("Processing fpga#%d  head:%d  processed:%d  cpus:", k, i_head[k], i_processed[k]);
+        buffer_counter[p] = 0;
         for (j=0; j<NR_cpu; j++) {
             i = find_lcore(params, ncores);
             if (j * NR_ch < 512)
@@ -332,7 +338,6 @@ int main(int argc, char **argv)
 
         i_head[k]++;
         if (i_head[k] >= NR_BUFFER) i_head[k] = 0;
-        buffer_counter[p] = 0;
 
         if (beamid >= 0) {
             buffer_beam[p] = true;
