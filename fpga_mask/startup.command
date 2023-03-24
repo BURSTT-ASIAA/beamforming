@@ -13,3 +13,6 @@ sudo truncate -s 2147483648 /dev/hugepages/voltage.bin
 
 xxd -l 16 -s 1048576000 /dev/hugepages/fpga0.bin
 xxd -l 16 -s 2048000000 /dev/hugepages/voltage.bin
+
+# (8192+64)*2*400*1000*30
+xxd -l 256 -s 198144000000 /mnt/fpga0

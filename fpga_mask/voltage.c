@@ -89,7 +89,7 @@ int main(int argc, char **argv)
     fd = open(SRC_FILE, O_RDWR);
     if (fd > 0) {
         buf = mmap(NULL, FILE_SIZE, PROT_READ, MAP_SHARED, fd, 0);
-        if(buf == MAP_FAILED){
+        if (buf == MAP_FAILED) {
             printf("Source Memory Mapping Failed\n");
             return 1;
         }
