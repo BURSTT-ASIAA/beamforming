@@ -30,7 +30,7 @@
 #define NR_run 1000UL // NR_pack / NR_sum
 #define NR_ch 128UL // must be multiple of 16
 #define NR_cpu 8L // 1024 / NR_ch
-#define NR_FPGA 4L
+#define NR_FPGA 1L
 #define DATA_SIZE (8192 + 64) * 2L
 #define DATA_HEADER 64L
 #define NR_BUFFER 16L
@@ -65,10 +65,10 @@ int asmfunc(short *mat, char *vec, long nr, long nc, void *dest, char *mask, lon
 
 //const unsigned mem_node[4] = {0, 1, 0, 1};
 const char *fpga_fn[] = {
+    "/mnt/fpga0",
+    "/mnt/fpga1",
     "/mnt/fpga2",
-    "/mnt/fpga2",
-    "/mnt/fpga2",
-    "/mnt/fpga2"
+    "/mnt/fpga3"
 };
 const char *intensity_fn[] = {
     "/dev/hugepages/fpga0.bin",
@@ -81,6 +81,7 @@ _Atomic bool quit_signal = false;
 _Atomic bool cpu_busy[RTE_MAX_LCORE];
 _Atomic int buffer_counter[NR_FPGA * NR_BUFFER];
 _Atomic bool buffer_beam[NR_FPGA * NR_BUFFER];
+_Atomic int buffer_blkid[NR_FPGA * NR_BUFFER];
 void *buffer[NR_FPGA], *vbuffer;
 long *ip_ptr[NR_FPGA], *vp_ptr;
 _Atomic int v_head=0, v_processed=0;
@@ -137,14 +138,15 @@ static int lcore_socket(void *arg)
         for (i = 0; i < NR_FPGA; i++) {
             p = i * NR_BUFFER + i_processed[i];
             if (buffer_counter[p] >= NR_cpu) {
-                *ip_ptr[i] = ++i_processed[i];
-                if (i_processed[i] == NR_BUFFER) i_processed[i] = 0;
+                ip_ptr[i][i_processed[i] + 1] = (long)buffer_blkid[p];
+                i_processed[i] = (i_processed[i] + 1) % NR_BUFFER;
+                *ip_ptr[i] = i_processed[i];
                 buffer_counter[p] = -1;
                 printf("=== Processed: fpga#%d  head:%d  processed:%d ===\n", i, i_head[i], i_processed[i]);
 
                 if (buffer_beam[p]) {
-                    *vp_ptr = ++v_processed;
-                    if (v_processed == NR_VBUFFER) v_processed = 0;
+                    v_processed = (v_processed + 1) % NR_VBUFFER;
+                    *vp_ptr = v_processed;
                 }
             }
         }
@@ -187,6 +189,7 @@ int main(int argc, char **argv)
     ssize_t len;
     int beamid;
     float phase;
+    char *mask_ptr;
 
     mqueue = mq_open("/burstt", O_RDONLY);
     if (mqueue == (mqd_t) -1) {
@@ -243,6 +246,7 @@ int main(int argc, char **argv)
     for (i = 0; i < NR_FPGA * NR_BUFFER; i++) {
         buffer_counter[i] = -1;
         buffer_beam[i] = false;
+        buffer_blkid[i] = -1;
     }
 
     // transposed matrix
@@ -306,11 +310,16 @@ int main(int argc, char **argv)
         if (buffer_counter[p] >= 0) {
             printf("Intensity buffer is not empty: fpga%d[%d]\n", k, i_head[k]);
         }
-        if (beamid > 0 && v_head == v_processed)
-            printf("Voltage data writing too slow\n");
 
+        mask_ptr = mask[k] + mq_data.index * MASK_BLOCK_SIZE;
+        printf("mask value:");
+        for (j=0; j<32; j++)
+            printf(" %02hhX", mask_ptr[j]);
+        printf("\n");
         printf("Processing fpga#%d  head:%d  processed:%d  cpus:", k, i_head[k], i_processed[k]);
+
         buffer_counter[p] = 0;
+        buffer_blkid[p] = mq_data.index;
         for (j=0; j<NR_cpu; j++) {
             i = find_lcore(params, ncores);
             if (j * NR_ch < 512)
@@ -328,7 +337,7 @@ int main(int argc, char **argv)
             params[i].dest = buffer[k] + (j * NR_ch * 16 + i_head[k] * length) * 4;
             params[i].beamid = beamid;
             params[i].vdest = vbuffer + v_head * VOLTAGE_BLOCK + j * NR_ch;
-            params[i].mask = mask[k] + mq_data.index * MASK_BLOCK_SIZE + (j * NR_ch / 512);
+            params[i].mask = mask_ptr + (j * NR_ch / 512);
             params[i].buffer_id = p;
 
             cpu_busy[i] = true;
@@ -343,6 +352,8 @@ int main(int argc, char **argv)
             buffer_beam[p] = true;
             v_head++;
             if (v_head >= NR_VBUFFER) v_head = 0;
+            if (v_head == v_processed)
+                printf("Voltage data writing too slow\n");
         } else {
             buffer_beam[p] = false;
         }
