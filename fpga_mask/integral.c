@@ -179,6 +179,7 @@ int main(int argc, char **argv)
     unsigned lcores[RTE_MAX_LCORE];
     long offset, offset0, length;
     mqd_t mqueue;
+    struct mq_attr attr;
     struct {
         int fpga;
         int index;
@@ -196,6 +197,16 @@ int main(int argc, char **argv)
         printf("Error open mqueue...\n");
         return 0;
     }
+
+    /* clean up mqueue fisrt */
+	mq_getattr(mqueue, &attr);
+	printf("mqueue: %lx, %ld, %ld, %ld\n", attr.mq_flags, attr.mq_maxmsg, attr.mq_msgsize, attr.mq_curmsgs);
+
+	for (i=0; i<attr.mq_curmsgs; i++) {
+		len = mq_receive(mqueue, (void *)&mq_data, sizeof(mq_data), &priority);
+		printf("[%d] length:%d, fpga#%d, index:%d, beamid:%d, priority:%d\n",
+				i, len, mq_data.fpga, mq_data.index, mq_data.beamid, priority);
+	}
 
     ret = rte_eal_init(argc, argv);
     if (ret < 0)
