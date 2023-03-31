@@ -22,7 +22,7 @@ int main(int argc, char **argv)
 
 	attr.mq_flags = 0;
 	attr.mq_maxmsg = 128;
-	attr.mq_msgsize = 16;
+	attr.mq_msgsize = sizeof(data);
 	attr.mq_curmsgs = 0;
 	mqueue = mq_open("/burstt", O_CREAT|O_RDWR, 0644, &attr);
 //	mqueue = mq_open("/burstt", O_RDWR);
@@ -32,8 +32,8 @@ int main(int argc, char **argv)
 	}
 
 //	for (i=0; i<64; i++) {
-//		data.fpga = i%4;
-//		data.index = 0;
+//		data.fpga = 0;
+//		data.index = i % 8;
 //		data.beamid = -1;
 //		mq_send(mqueue, (void *)&data, sizeof(data), 0);
 //	}

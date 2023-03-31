@@ -58,7 +58,7 @@ main(int argc, char **argv)
 	char *voltage;
 	int i, j, k, n, p, p2, ncores;
 	parStruct params[RTE_MAX_LCORE];
-	long beamid = 8;
+	long beamid = 9;
 
 	ret = rte_eal_init(argc, argv);
 	if (ret < 0)
@@ -90,10 +90,10 @@ main(int argc, char **argv)
 				p2 = p + 1;
 //				if (i == j && (k % 2) == 0) {
 				if (i == j) {
-					mat[p] = 256;
+					mat[p] = 4096;
 					mat[p2] = 0;
 				} else {
-					mat[p] = 256;
+					mat[p] = 0;
 					mat[p2] = 0;
 				}
 			}
@@ -102,7 +102,8 @@ main(int argc, char **argv)
 		for (j=0; j<1024; j++)
 			for (k=0; k<16; k++) {
 				p = (i * 1024 + j) * 16 + k;
-				vec[p] = 0x88;
+//				vec[p] = 0x88;
+				vec[p] = (k + j) % 256;
 //				vec[p] = j % 256;
 //				if (j % 2 != 0)
 //					vec[p] = 0;
