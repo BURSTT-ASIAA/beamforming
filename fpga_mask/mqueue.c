@@ -24,7 +24,7 @@ int main(int argc, char **argv)
 	attr.mq_maxmsg = 128;
 	attr.mq_msgsize = sizeof(data);
 	attr.mq_curmsgs = 0;
-	mqueue = mq_open("/burstt", O_CREAT|O_RDWR, 0644, &attr);
+	mqueue = mq_open("/burstt", O_CREAT|O_RDWR, 0666, &attr);
 //	mqueue = mq_open("/burstt", O_RDWR);
 	if (mqueue == (mqd_t) -1) {
 		printf("Error open mqueue...\n");
