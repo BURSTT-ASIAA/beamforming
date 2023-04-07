@@ -33,12 +33,12 @@
 #define NR_FPGA 1L
 #define DATA_SIZE (8192 + 64) * 2L
 #define DATA_HEADER 64L
-#define NR_BUFFER 16L
+#define NR_BUFFER 32L
 #define NR_VBUFFER 5L
 #define BLOCK_SIZE DATA_SIZE * NR_sum * NR_run
 #define MASK_OFFSET BLOCK_SIZE * 30L
 #define MASK_BLOCK_SIZE ((NR_sum * NR_run) >> 2)
-#define INTENSITY_DATA_SIZE NR_run * NR_BUFFER * 1024 * 16 * 4L
+#define INTENSITY_DATA_SIZE NR_run * NR_BUFFER * 1024 * 16 * 2L
 #define INTENSITY_INFO_SIZE 64L
 #define INTENSITY_SIZE INTENSITY_DATA_SIZE + INTENSITY_INFO_SIZE
 #define VOLTAGE_BLOCK NR_sum * NR_run * NR_cpu * NR_ch
@@ -115,7 +115,7 @@ static int lcore_integral(void *arg)
         for (i=0; i<params->repeat; i++) {
             asmfunc(params->mat, vec, nr, nc, dest, params->mask, beamid, vdest);
             vec += DATA_SIZE * params->nr;
-            dest += 1024 * 16 * 4;
+            dest += 1024 * 16 * 2;
             vdest += 1024;
         }
         cpu_busy[params->cpu_id] = false;
@@ -170,7 +170,7 @@ static int find_lcore(task_s *tasks, int ncores)
 int main(int argc, char **argv)
 {
     int fd, ret;
-    unsigned lcore_id, socket_id;
+    unsigned lcore_id;
     char *vec[NR_FPGA], *mask[NR_FPGA];
     short mat[16*16*2*1024];
     int i, j, k, p, ncores;
@@ -345,7 +345,7 @@ int main(int argc, char **argv)
             else
                 params[i].nc = 1024 - j * NR_ch;
             params[i].repeat = NR_run;
-            params[i].dest = buffer[k] + (j * NR_ch * 16 + i_head[k] * length) * 4;
+            params[i].dest = buffer[k] + (j * NR_ch * 16 + i_head[k] * length) * 2;
             params[i].beamid = beamid;
             params[i].vdest = vbuffer + v_head * VOLTAGE_BLOCK + j * NR_ch;
             params[i].mask = mask_ptr + (j * NR_ch / 512);

@@ -236,11 +236,13 @@ passMask:
     ; copy to destination
     xor rax, rax
     mov rbx, rcx
+    vpxorq zmm1, zmm1, zmm1
+    vmovdqu16 ymm1, [pickOdd]
 
 copyLp:
-    vmovaps zmm0, [rsp+rax]
-    vmovaps [r8+rax], zmm0
-    add rax, 64
+    vpermw zmm0, zmm1, [rsp+rax*2]
+    vmovdqu16 [r8+rax], ymm0
+    add rax, 32
     dec rbx
     jnz copyLp
 

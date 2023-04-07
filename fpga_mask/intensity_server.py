@@ -4,7 +4,7 @@ import socket
 #import errno
 import time
 
-NBUF = 16
+NBUF = 32
 BLK_SIZE = 1024*16*1000
 DATA_SIZE = BLK_SIZE * NBUF
 HOST = '0.0.0.0'
@@ -15,10 +15,8 @@ FPGA_SIZE = 2**30*185
 FPGA_DATA_SIZE = FPGA_BLK_SZ * FPGA_BLK_NB
 MASK_BLK_SZ = 100000
 
-intensity = np.memmap('/dev/hugepages/fpga0.bin', dtype='float32', shape=(DATA_SIZE))
-blk_ptr = cast(c_void_p(intensity.ctypes.data + DATA_SIZE * 4), POINTER(c_long))
-clk_counter = np.zeros(8, dtype='u1')
-
+intensity = np.memmap('/dev/hugepages/fpga0.bin', dtype='i2', shape=(DATA_SIZE))
+blk_ptr = cast(c_void_p(intensity.ctypes.data + DATA_SIZE * 2), POINTER(c_long))
 fpga_data = np.memmap('/mnt/fpga0', dtype='u1', shape=(FPGA_SIZE))
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -29,9 +27,9 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         conn, addr = s.accept()
         print('Connected by', addr)
 
-        last_blk = blk_ptr.contents.value
+        last_blk = blk_ptr[0]
         while True:
-            while last_blk == blk_ptr.contents.value:
+            while last_blk == blk_ptr[0]:
                 time.sleep(0.01)
 
             hdr_id = blk_ptr[last_blk + 1]
