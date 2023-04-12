@@ -95,8 +95,8 @@ static int lcore_integral(void *arg)
     void *dest, *vdest;
     long i;
     long nr, nc, beamid;
-	float time_used;
-	struct timeval start_t, end_t;
+    float time_used;
+    struct timeval start_t, end_t;
 
     while (!quit_signal) {
         if (!cpu_busy[params->cpu_id]) {
@@ -104,7 +104,7 @@ static int lcore_integral(void *arg)
             continue;
         }
 
-		gettimeofday(&start_t, NULL);
+        gettimeofday(&start_t, NULL);
 //        printf("Enter integral function: CPU#%d\n", params->cpu_id);
         vec = params->vec;
         dest = params->dest;
@@ -120,9 +120,10 @@ static int lcore_integral(void *arg)
         }
         cpu_busy[params->cpu_id] = false;
         buffer_counter[params->buffer_id]++;
-		gettimeofday(&end_t, NULL);
-		time_used = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_usec - start_t.tv_usec) / 1000000.;
-		printf("lcores #%d(%d),  Real time: %3f\n", rte_lcore_id(), params->cpu_id, time_used);
+        gettimeofday(&end_t, NULL);
+        time_used = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_usec - start_t.tv_usec) / 1000000.;
+        printf("lcores #%d(%d),  Real time: %3f, Out: %x, In: %x\n",
+                rte_lcore_id(), params->cpu_id, time_used, *(long *)dest, *(long *)vec);
 //        printf("Exit integral function: CPU#%d  Real time: %3f  counter:%d\n", params->cpu_id, time_used, buffer_counter[params->buffer_id]);
     }
 
@@ -199,14 +200,14 @@ int main(int argc, char **argv)
     }
 
     /* clean up mqueue fisrt */
-	mq_getattr(mqueue, &attr);
-	printf("mqueue: %lx, %ld, %ld, %ld\n", attr.mq_flags, attr.mq_maxmsg, attr.mq_msgsize, attr.mq_curmsgs);
+    mq_getattr(mqueue, &attr);
+    printf("mqueue: %lx, %ld, %ld, %ld\n", attr.mq_flags, attr.mq_maxmsg, attr.mq_msgsize, attr.mq_curmsgs);
 
-	for (i=0; i<attr.mq_curmsgs; i++) {
-		len = mq_receive(mqueue, (void *)&mq_data, sizeof(mq_data), &priority);
-		printf("[%d] length:%d, fpga#%d, index:%d, beamid:%d, priority:%d\n",
-				i, len, mq_data.fpga, mq_data.index, mq_data.beamid, priority);
-	}
+    for (i=0; i<attr.mq_curmsgs; i++) {
+        len = mq_receive(mqueue, (void *)&mq_data, sizeof(mq_data), &priority);
+        printf("[%d] length:%d, fpga#%d, index:%d, beamid:%d, priority:%d\n",
+                i, len, mq_data.fpga, mq_data.index, mq_data.beamid, priority);
+    }
 
     ret = rte_eal_init(argc, argv);
     if (ret < 0)

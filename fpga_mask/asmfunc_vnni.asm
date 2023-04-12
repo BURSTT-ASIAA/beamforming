@@ -7,6 +7,7 @@
 %define cur_bmask [r11+152]
 %define voltage_ch [r11+160]
 %define voltage_data [r11+176]
+%define pkt_count [r11+184]
 %define parm1 [rbp+80]
 %define parm2 [rbp+88]
 default rel
@@ -19,7 +20,7 @@ swapReIm:   dw  1,0,3,2,5,4,7,6,9,8,11,10,13,12,15,14
             dw  17,16,19,18,21,20,23,22,25,24,27,26,29,28,31,30
 bitMask:    times 16 dw 0xF0
 pickOdd:	dw 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31
-scaling:    dd 134217728.0  ; 2^27
+scaling:    dd 2097152.0  ; 4096**2 / (128/16)
 
     section .text
 
@@ -72,6 +73,7 @@ evenPkg:
     mov voltage_ch, rax
 
     xor rax, rax
+    mov pkt_count, rax
     mov rbx, rcx
 clearLp:
     vmovaps [rsp+rax], zmm0
@@ -96,6 +98,7 @@ integralLp3:
     and rax, cur_bmask
     jz passPkt
 
+    inc qword pkt_count
     mov r13, r9     ; current channel
     mov rbx, r9
     shl rbx, 10
@@ -233,6 +236,17 @@ passMask:
     cmp r9, rcx
     jb integralLp4
 
+    ; normalization
+    vxorps zmm2, zmm2, zmm2
+    mov rax, pkt_count
+    and rax, rax
+    jz allzero
+    vpbroadcastd zmm2, pkt_count
+    vcvtdq2ps zmm2, zmm2
+    vmulps zmm2, zmm2, [scaling]{1to16}
+    vrcp14ps zmm2, zmm2
+allzero:
+
     ; copy to destination
     xor rax, rax
     mov rbx, rcx
@@ -240,7 +254,10 @@ passMask:
     vmovdqu16 ymm1, [pickOdd]
 
 copyLp:
-    vpermw zmm0, zmm1, [rsp+rax*2]
+    vmovaps zmm3, [rsp+rax*2]
+    vmulps zmm3, zmm3, zmm2
+    vpermw zmm0, zmm1, zmm3
+;    vpermw zmm0, zmm1, [rsp+rax*2]
     vmovdqu16 [r8+rax], ymm0
     add rax, 32
     dec rbx
