@@ -116,7 +116,7 @@ static int lcore_integral(void *arg)
             asmfunc(params->mat, vec, nr, nc, dest, params->mask, beamid, vdest);
             vec += DATA_SIZE * params->nr;
             dest += 1024 * 16 * 2;
-            vdest += 1024;
+            vdest += 1024 * nr;
         }
         cpu_busy[params->cpu_id] = false;
         buffer_counter[params->buffer_id]++;
