@@ -36,7 +36,7 @@
 #define NR_BUFFER 32L
 #define NR_VBUFFER 5L
 #define BLOCK_SIZE DATA_SIZE * NR_sum * NR_run
-#define MASK_OFFSET BLOCK_SIZE * 30L
+#define MASK_OFFSET BLOCK_SIZE * 20L
 #define MASK_BLOCK_SIZE ((NR_sum * NR_run) >> 2)
 #define INTENSITY_DATA_SIZE NR_run * NR_BUFFER * 1024 * 16 * 2L
 #define INTENSITY_INFO_SIZE 64L
@@ -122,7 +122,7 @@ static int lcore_integral(void *arg)
         buffer_counter[params->buffer_id]++;
         gettimeofday(&end_t, NULL);
         time_used = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_usec - start_t.tv_usec) / 1000000.;
-        printf("lcores #%d(%d),  Real time: %3f, Out: %x, In: %x\n",
+        printf("lcores #%d(%d),  Real time: %3f, Out: %lx, In: %lx\n",
                 rte_lcore_id(), params->cpu_id, time_used, *(long *)dest, *(long *)vec);
 //        printf("Exit integral function: CPU#%d  Real time: %3f  counter:%d\n", params->cpu_id, time_used, buffer_counter[params->buffer_id]);
     }

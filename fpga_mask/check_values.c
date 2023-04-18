@@ -14,7 +14,7 @@
 #include <rte_debug.h>
 #include <rte_malloc.h>
 
-#define NR_pack 1L
+#define NR_pack 2L
 #define NR_ch 128UL
 #define NR_cpu 8
 
@@ -30,7 +30,7 @@ typedef struct {
 } parStruct;
 
 int asmfunc(short *mat, char *vec, long nr, long nc, void *dest, char *mask, long beamid, void *voltage);
-void b16tof32(void *dest, void *src);
+void f16tof32(void *dest, void *src);
 
 /* Launch a function on lcore. 8< */
 static int
@@ -161,9 +161,9 @@ main(int argc, char **argv)
 	for (i=0; i<16; i++) {
 		printf(" %hhx", vec[i]);
 	}
-	printf("\n");
+	printf("\n\n");
 	printf("Dest:\n");
-	b16tof32(dest2, dest);
+	f16tof32(dest2, dest);
 	for (i=0; i<1024; i++) {
 		printf("channel %4d: ", i);
 		for (j=0; j<16; j++) {

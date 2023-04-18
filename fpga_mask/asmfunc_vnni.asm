@@ -1,6 +1,6 @@
 %define NR_2C 8
-;%define DATA_OFF (8192 + 64) * 2
-%define DATA_OFF 8192 * 2
+%define DATA_OFF (8192 + 64) * 2
+;%define DATA_OFF 8192 * 2
 %define mask [r11+128]
 %define cur_mask [r11+136]
 %define bmask [r11+144]
@@ -250,15 +250,11 @@ allzero:
     ; copy to destination
     xor rax, rax
     mov rbx, rcx
-    vpxorq zmm1, zmm1, zmm1
-    vmovdqu16 ymm1, [pickOdd]
 
 copyLp:
     vmovaps zmm3, [rsp+rax*2]
     vmulps zmm3, zmm3, zmm2
-    vpermw zmm0, zmm1, zmm3
-;    vpermw zmm0, zmm1, [rsp+rax*2]
-    vmovdqu16 [r8+rax], ymm0
+    vcvtps2ph [r8+rax], zmm3, 0
     add rax, 32
     dec rbx
     jnz copyLp
