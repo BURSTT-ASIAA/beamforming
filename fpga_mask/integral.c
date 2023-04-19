@@ -46,6 +46,8 @@
 #define VOLTAGE_DATA_SIZE VOLTAGE_BLOCK * NR_VBUFFER
 #define VOLTAGE_INFO_SIZE 64L
 #define VOLTAGE_SIZE VOLTAGE_DATA_SIZE + VOLTAGE_INFO_SIZE
+#define MATRIX_FILE "/mnt/bonsai/matrix"
+#define MATRIX_SIZE 16*16*2*2*1024
 
 typedef struct __attribute__ ((aligned (64))) {
     short *mat;
@@ -173,7 +175,7 @@ int main(int argc, char **argv)
     int fd, ret;
     unsigned lcore_id;
     char *vec[NR_FPGA], *mask[NR_FPGA];
-    short mat[16*16*2*1024];
+    short *mat;
     int i, j, k, p, ncores;
     task_s params[RTE_MAX_LCORE];
     struct stat sb[NR_FPGA];
@@ -261,6 +263,15 @@ int main(int argc, char **argv)
         buffer_blkid[i] = -1;
     }
 
+    fd = open(MATRIX_FILE, O_RDWR);
+    if(fd < 0)
+        rte_exit(EXIT_FAILURE, "Open matrix file failed\n");
+
+    mat = mmap(NULL, MATRIX_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    close(fd);
+    if(mat == MAP_FAILED)
+        rte_exit(EXIT_FAILURE, "Mapping matrix file failed\n");
+
     // transposed matrix
     for (k=0; k<1024; k++)
         for (j=0; j<16; j++)
@@ -281,6 +292,7 @@ int main(int argc, char **argv)
                 mat[p + 1] = -256 * sinf(phase);
 */
             }
+    msync(mat, MATRIX_SIZE, MS_SYNC);
 
     /* Launches the socket+integral functions on lcores. 8< */
     i = -1;
@@ -382,6 +394,7 @@ int main(int argc, char **argv)
         munmap(buffer[i], INTENSITY_SIZE);
     }
     munmap(vbuffer, VOLTAGE_SIZE);
+    munmap(mat, MATRIX_SIZE);
     rte_eal_cleanup();
 
     mq_close(mqueue);
