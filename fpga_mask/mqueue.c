@@ -2,11 +2,6 @@
 #include <fcntl.h>
 #include <mqueue.h>
 
-typedef struct {
-	int fpga;
-	int index;
-} queue_s;
-
 int main(int argc, char **argv)
 {
 	mqd_t mqueue;

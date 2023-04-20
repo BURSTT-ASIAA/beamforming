@@ -58,10 +58,13 @@ $(ASM_FILE): Makefile $(ASM_SRC) | build
 	nasm -f elf64 -o $@ $(ASM_SRC)
 
 mqueue: mqueue.c
-	$(CC) -o mqueue mqueue.c -lrt
+	$(CC) -o $@ mqueue.c -lrt
+
+fpga_sim: fpga_sim.c
+	$(CC) -o $@ fpga_sim.c -lrt
 
 ramdisk: ramdisk.c build/fp16.o
-	$(CC) -o ramdisk ramdisk.c build/fp16.o
+	$(CC) -o $@ ramdisk.c build/fp16.o
 
 build/fp16.o: fp16.asm
 	nasm -f elf64 -o $@ fp16.asm

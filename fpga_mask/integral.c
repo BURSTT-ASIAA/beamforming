@@ -125,7 +125,7 @@ static int lcore_integral(void *arg)
         gettimeofday(&end_t, NULL);
         time_used = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_usec - start_t.tv_usec) / 1000000.;
         printf("lcores #%d(%d),  Real time: %3f, Out: %lx, In: %lx\n",
-                rte_lcore_id(), params->cpu_id, time_used, *(long *)dest, *(long *)vec);
+                rte_lcore_id(), params->cpu_id, time_used, *(long *)params->dest, *(long *)params->vec);
 //        printf("Exit integral function: CPU#%d  Real time: %3f  counter:%d\n", params->cpu_id, time_used, buffer_counter[params->buffer_id]);
     }
 
