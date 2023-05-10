@@ -74,3 +74,6 @@ intensity: intensity.c
 
 voltage: voltage.c
 	$(CC) -o $@ voltage.c
+
+build/avxcpy.o: avxcpy.asm
+	nasm -f elf64 -o $@ avxcpy.asm
