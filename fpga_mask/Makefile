@@ -77,3 +77,9 @@ voltage: voltage.c
 
 build/avxcpy.o: avxcpy.asm
 	nasm -f elf64 -o $@ avxcpy.asm
+
+build/multiply_vnni.o: multiply_vnni.asm
+	nasm -f elf64 -o $@ multiply_vnni.asm
+
+multiply: multiply.c build/multiply_vnni.o
+	$(CC) -o $@ multiply.c build/multiply_vnni.o
