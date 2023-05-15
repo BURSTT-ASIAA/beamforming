@@ -21,11 +21,12 @@ typedef struct {
 	char *vec;
 	long nr;
 	int repeat;
-	float *dest;
+	char *dest;
 	double min_t, max_t, avg_t;
 } parStruct;
 
-void multiply_vnni(short *mat, char *vec, long nr, float *dest);
+void multiply_vnni(short *mat, char *vec, long nr, char *dest);
+void multiply_fp16(short *mat, char *vec, long nr, char *dest);
 
 /* Launch a function on lcore. 8< */
 static int
@@ -35,7 +36,7 @@ lcore_math(void *arg)
 	struct timeval start_t, end_t;
 	double time_used, min_t, max_t, avg_t;
 	char *vec;
-	float *dest;
+	char *dest;
 	int i;
 
 	min_t = DBL_MAX;
@@ -54,7 +55,7 @@ lcore_math(void *arg)
 		avg_t += time_used;
 
 		vec += 64 * params->nr;
-		dest += 16;
+		dest += 64;
 	}
 
 	params->min_t = min_t;
@@ -71,7 +72,7 @@ main(int argc, char **argv)
 {
 	char *vec;
 	short mat[16*16*2];
-	float *dest;
+	char *dest;
 	int i, j, p;
 	parStruct params;
 	clock_t start, end;
