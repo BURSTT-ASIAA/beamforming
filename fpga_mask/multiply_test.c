@@ -79,7 +79,7 @@ main(int argc, char **argv)
 	parStruct params;
 	float *fptr, matf[16*16*2], vecf[16*2];
 	short *sptr;
-//	_Float16 a;
+	_Float16 *hptr;
 
 	/* Create the data buffer */
 	vec = malloc(64 * NR_run * NR_sum);
@@ -136,37 +136,38 @@ main(int argc, char **argv)
 		}
 	printf("\n");
 
-	// transposed matrix FP16
+	// transposed matrix in FP16
+	hptr = (_Float16 *)mat;
 	for (j=0; j<16; j++)
 		for (i=0; i<16; i++) {
 			// p: real, p2:imag
 			p = (j * 16 + i) * 2;
 			if (i == j)
-				mat[p] = 1;
+				hptr[p] = 1;
 			else
-				mat[p] = 0;
-			mat[p + 1] = 0;
+				hptr[p] = 0;
+			hptr[p + 1] = 0;
 		}
 
 	// input data
-	sptr = (short *)vec;
+	hptr = (_Float16 *)vec;
 	for (j=0; j<NR_run*NR_sum; j++)
 		for (i=0; i<16; i++) {
 			// p: real, p2:imag
 			p = (j * 16 + i) * 2;
-			sptr[p] = i;
-			sptr[p + 1] = 0;
+			hptr[p] = i;
+			hptr[p + 1] = 0;
 		}
 
 	/* Launches the function */
-	lcore_math(&params);
+	lcore_math_fp16(&params);
 
 	// Print output
-	fptr = (float *)dest;
+	hptr = (_Float16 *)dest;
 	printf("=== FP16 output ===\n");
 	for (j=0; j<NR_run; j++)
 		for (i=0; i<16; i++) {
-			printf(" %.0f", fptr[i]);
+			printf(" %.0f", hptr[i]);
 		}
 	printf("\n");
 
