@@ -40,6 +40,20 @@ loop2:
 	leave
 	ret
 
+	global f32tof16x
+f32tof16x:
+	; convert 16 floats
+	vmovaps zmm0, [rsi]
+	vcvtps2ph [rdi], zmm0, 0
+	ret
+
+	global f16tof32x
+f16tof32x:
+	; convert 16 floats
+	vcvtph2ps zmm0, [rsi]
+	vmovaps [rdi], zmm0
+	ret
+
 	global f32tob16
 f32tob16:
 	push rbp

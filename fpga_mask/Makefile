@@ -85,4 +85,8 @@ build/multiply_fp16.o: multiply_fp16.asm
 	nasm -f elf64 -o $@ multiply_fp16.asm
 
 multiply: multiply.c build/multiply_vnni.o build/multiply_fp16.o
-	$(CC) -o $@ multiply.c build/multiply_vnni.o
+	$(CC) -o $@ multiply.c build/multiply_vnni.o build/multiply_fp16.o
+
+multiply_test: multiply_test.c build/multiply_vnni.o build/multiply_fp16.o
+	$(CC) -o $@ multiply_test.c build/multiply_vnni.o build/multiply_fp16.o
+#	$(CC) -o $@ -mavx512fp16 multiply_test.c build/multiply_vnni.o build/multiply_fp16.o
